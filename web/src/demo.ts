@@ -112,6 +112,7 @@ export const NOMOR: Nomor[] = [
     putri: true,
   },
   { nomor: "eFootball", pelatih: "Qwa", atlet: ["Elga Cahya Putra"] },
+  { nomor: "GTA IV (sampel)", pelatih: "Pelatih Sampel", atlet: ["Muhammad Dzul Fikri", "Donny Ardy Kusuma"] },
 ];
 
 /**

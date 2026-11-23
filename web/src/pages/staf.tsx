@@ -7,7 +7,7 @@ import { CatatanItem, Linimasa, TulisCatatan } from "../bersama.js";
 import { GarminTim, KartuGarmin } from "../garmin.js";
 import { KartuPerforma, PerformaTim } from "../performa.js";
 import { TrenChart } from "../TrenChart.js";
-import { HalamanIntegrasiGarmin } from "./integrasi.js";
+import { HalamanIntegrasiDevice } from "./integrasi.js";
 import { ItemLaporan } from "./atlet.js";
 import { HalamanLogAudit } from "./manajer.js";
 import { DaftarAtlet } from "./roster.js";
@@ -53,7 +53,7 @@ export const MENU_STAF: { id: HalamanStaf["id"]; label: string; kontrol?: true }
   { id: "kotak_masuk", label: "Kotak Masuk" },
   { id: "konfigurasi", label: "Konfigurasi Skor" },
   { id: "audit", label: "Log Audit", kontrol: true },
-  { id: "integrasi", label: "Integrasi Garmin", kontrol: true },
+  { id: "integrasi", label: "Integrasi Device", kontrol: true },
 ];
 
 export function HalamanStaf({ halaman, pindah }: { halaman: HalamanStaf; pindah(h: HalamanStaf): void }) {
@@ -75,7 +75,7 @@ export function HalamanStaf({ halaman, pindah }: { halaman: HalamanStaf; pindah(
     case "audit":
       return <HalamanLogAudit />;
     case "integrasi":
-      return <HalamanIntegrasiGarmin />;
+      return <HalamanIntegrasiDevice />;
   }
 }
 

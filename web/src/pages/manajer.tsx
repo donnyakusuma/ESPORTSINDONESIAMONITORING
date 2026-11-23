@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HalamanIntegrasiGarmin } from "./integrasi.js";
+import { HalamanIntegrasiDevice } from "./integrasi.js";
 import { DaftarAtlet } from "./roster.js";
 import { fmtWaktu, Kosong, Pesan, useApp } from "../ui.js";
 
@@ -8,12 +8,12 @@ export type HalamanManajer = "atlet" | "audit" | "integrasi";
 export const MENU_MANAJER: { id: HalamanManajer; label: string }[] = [
   { id: "atlet", label: "Atlet" },
   { id: "audit", label: "Log Audit" },
-  { id: "integrasi", label: "Integrasi Garmin" },
+  { id: "integrasi", label: "Integrasi Device" },
 ];
 
 export function HalamanManajer({ halaman }: { halaman: HalamanManajer }) {
   if (halaman === "audit") return <HalamanLogAudit />;
-  if (halaman === "integrasi") return <HalamanIntegrasiGarmin />;
+  if (halaman === "integrasi") return <HalamanIntegrasiDevice />;
   return <DaftarAtlet />;
 }
 

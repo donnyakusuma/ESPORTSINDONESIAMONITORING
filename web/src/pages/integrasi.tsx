@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { IntegrasiGarmin, JenisDataGarmin } from "../../../src/index.js";
 import { simulasiSinkronGarmin } from "../demo.js";
 import { putusGarmin, masukGarmin, tarikGarmin, useGarminLive } from "../garminLive.js";
 import { IkonGarmin, METRIK_GARMIN } from "../garmin.js";
-import { fmtWaktu, Info, inisial, Pesan, useAksi, useApp } from "../ui.js";
+import { fmtWaktu, Info, inisial, Pesan, Tabs, useAksi, useApp } from "../ui.js";
 
 /**
  * Pengaturan koneksi ke Garmin Health API. Hanya Super admin dan Admin.
@@ -25,7 +25,7 @@ const JENIS_DATA: { id: JenisDataGarmin; label: string; metrik: string[] }[] = [
   { id: "blood_pressures", label: "Blood Pressures", metrik: ["tekananDarah"] },
 ];
 
-export function HalamanIntegrasiGarmin() {
+function TabGarmin() {
   const { svc, actor } = useApp();
   const aksi = useAksi();
   const r = svc.integrasiGarmin(actor);
@@ -37,7 +37,7 @@ export function HalamanIntegrasiGarmin() {
     <>
       <div className="judul">
         <div>
-          <h1>Integrasi Garmin</h1>
+          <h2>Garmin</h2>
           <p>Hubungkan Tim ke Garmin Health API agar data Kondisi Atlet masuk otomatis dari jam Garmin atlet.</p>
         </div>
         <StatusIntegrasi pengaturan={pengaturan} />
@@ -421,5 +421,153 @@ function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
         </p>
       </form>
     </section>
+  );
+}
+
+/** Integrasi perangkat wearable: satu tab per merek. */
+export function HalamanIntegrasiDevice() {
+  const [tab, setTab] = useState<"garmin" | "whoop">("garmin");
+  return (
+    <>
+      <div className="judul">
+        <div>
+          <h1>Integrasi Device</h1>
+          <p>Hubungkan perangkat wearable atlet agar data Kondisi Atlet masuk otomatis.</p>
+        </div>
+      </div>
+      <Tabs<"garmin" | "whoop">
+        nilai={tab}
+        pilihan={[
+          { id: "garmin", label: "Garmin" },
+          { id: "whoop", label: "Whoop" },
+        ]}
+        ubah={setTab}
+      />
+      {tab === "garmin" ? <TabGarmin /> : <TabWhoop />}
+    </>
+  );
+}
+
+type StatusWhoop = { connected: boolean; needsReconnect?: boolean; whoopUserId?: string; connectedAt?: string };
+type RingkasanWhoop = {
+  recovery: { n: number; avgScore: number | null; avgHrvRmssdMs: number | null; avgRestingHr: number | null };
+  sleep: { n: number; avgPerformancePct: number | null };
+  cycle: { n: number; avgDayStrain: number | null };
+  workouts: { n: number };
+};
+
+const f = (n: number | null | undefined, s = "") => (n === null || n === undefined ? "–" : `${n}${s}`);
+
+/**
+ * Whoop lewat server lokal whoop-esport (OAuth 2.0 resmi, port 3200, dialihkan oleh proxy Vite).
+ * Butuh WHOOP_CLIENT_ID dan WHOOP_CLIENT_SECRET dari Whoop Developer Dashboard di .env server itu.
+ */
+function TabWhoop() {
+  const r = useApp().svc.integrasiGarmin(useApp().actor);
+  const atlet = r.ok ? r.data.atlet.map((a) => ({ id: a.athleteId, nama: a.nama })) : [];
+  const [id, setId] = useState(atlet[0]?.id ?? "");
+  const [status, setStatus] = useState<StatusWhoop | null>(null);
+  const [ringkas, setRingkas] = useState<RingkasanWhoop | null>(null);
+  const [sibuk, setSibuk] = useState(false);
+  const [pesan, setPesan] = useState<{ ok: boolean; teks: string } | null>(null);
+  const [mati, setMati] = useState(false);
+
+  async function muat(athleteId: string) {
+    try {
+      const s = (await (await fetch(`/api/athletes/${encodeURIComponent(athleteId)}/status`)).json()) as StatusWhoop;
+      setStatus(s);
+      setMati(false);
+      setRingkas(s.connected ? ((await (await fetch(`/api/athletes/${encodeURIComponent(athleteId)}/summary?days=7`)).json()) as RingkasanWhoop) : null);
+    } catch {
+      setMati(true);
+      setStatus(null);
+      setRingkas(null);
+    }
+  }
+  useEffect(() => {
+    if (id) void muat(id);
+  }, [id]);
+
+  async function aksi(f: () => Promise<Response>, ok: string) {
+    setSibuk(true);
+    setPesan(null);
+    try {
+      const res = await f();
+      const j = await res.json().catch(() => ({}));
+      setPesan(res.ok ? { ok: true, teks: ok } : { ok: false, teks: (j as { error?: string }).error ?? `Gagal (${res.status})` });
+    } catch {
+      setPesan({ ok: false, teks: "Server Whoop tidak merespons." });
+    }
+    await muat(id);
+    setSibuk(false);
+  }
+
+  return (
+    <>
+      <div className="judul">
+        <div>
+          <h2>Whoop</h2>
+          <p>Hubungkan akun Whoop atlet agar recovery, strain, tidur, dan HRV masuk otomatis.</p>
+        </div>
+        <span className={`status ${status?.connected ? "hijau" : "abu_abu"}`}>{status?.connected ? "Terhubung" : "Belum terhubung"}</span>
+      </div>
+      {mati && (
+        <Info jenis="peringatan">
+          <span>
+            Server Whoop tidak aktif. Jalankan <code>npm run dev</code> di folder <code>whoop-esport</code> (port 3200), lalu isi
+            WHOOP_CLIENT_ID dan WHOOP_CLIENT_SECRET di <code>.env</code>-nya.
+          </span>
+        </Info>
+      )}
+      <section className="card stack">
+        <label className="field">
+          <span>Atlet</span>
+          <select value={id} onChange={(e) => setId(e.target.value)}>
+            {atlet.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nama}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="row">
+          {!status?.connected && (
+            <a className="btn utama" href={`/whoop/connect?athleteId=${encodeURIComponent(id)}`}>
+              {status?.needsReconnect ? "Hubungkan ulang Whoop" : "Hubungkan Whoop"}
+            </a>
+          )}
+          {status?.connected && (
+            <>
+              <button className="btn utama" disabled={sibuk} onClick={() => void aksi(() => fetch(`/api/athletes/${encodeURIComponent(id)}/sync?days=7`, { method: "POST" }), "Data Whoop 7 hari terakhir ditarik.")}>
+                {sibuk ? "Menarik…" : "Tarik data"}
+              </button>
+              <button className="btn" disabled={sibuk} onClick={() => void aksi(() => fetch(`/whoop/disconnect/${encodeURIComponent(id)}`, { method: "DELETE" }), "Koneksi Whoop diputus.")}>
+                Putuskan
+              </button>
+            </>
+          )}
+        </div>
+        {pesan && <Info jenis={pesan.ok ? "info" : "peringatan"}>{pesan.teks}</Info>}
+        {status?.connected && (
+          <p className="muted kecil">
+            Terhubung{status.connectedAt ? ` sejak ${fmtWaktu(status.connectedAt)}` : ""} · ID Whoop {status.whoopUserId}
+          </p>
+        )}
+      </section>
+      {ringkas && (
+        <section className="kpi-grid" aria-label="Ringkasan 7 hari">
+          <div className="card kpi"><span className="kpi-label">Recovery rata-rata</span><b className="kpi-nilai">{f(ringkas.recovery.avgScore, "%")}</b><span className="kpi-catatan">{ringkas.recovery.n} hari</span></div>
+          <div className="card kpi"><span className="kpi-label">HRV rata-rata</span><b className="kpi-nilai">{f(ringkas.recovery.avgHrvRmssdMs)}<small> ms</small></b><span className="kpi-catatan">Istirahat {f(ringkas.recovery.avgRestingHr, " bpm")}</span></div>
+          <div className="card kpi"><span className="kpi-label">Performa tidur</span><b className="kpi-nilai">{f(ringkas.sleep.avgPerformancePct, "%")}</b><span className="kpi-catatan">{ringkas.sleep.n} malam</span></div>
+          <div className="card kpi"><span className="kpi-label">Strain harian</span><b className="kpi-nilai">{f(ringkas.cycle.avgDayStrain)}</b><span className="kpi-catatan">{ringkas.workouts.n} latihan</span></div>
+        </section>
+      )}
+      <Info>
+        <span>
+          Alur resmi Whoop (OAuth 2.0). Redirect URL <code>http://localhost:3200/whoop/callback</code> harus didaftarkan di Whoop Developer
+          Dashboard; bila Whoop mewajibkan HTTPS, pakai tunnel dan ubah <code>WHOOP_REDIRECT_URI</code>.
+        </span>
+      </Info>
+    </>
   );
 }

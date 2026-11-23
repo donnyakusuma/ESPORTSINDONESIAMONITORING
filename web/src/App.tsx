@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { tarikGarmin } from "./garminLive.js";
 import { Dashboard } from "./dashboard.js";
 import { buatDemo, hariIniTim } from "./demo.js";
 import { HalamanAtlet, MENU_ATLET } from "./pages/atlet.js";
@@ -85,6 +86,13 @@ function Aplikasi({
   const daftarNama = atletAktif.filter((a) => !kelompok || a.kelompok === kelompok);
   const [idAtlet, setIdAtlet] = useState("");
   const atletTerpilih = daftarNama.find((a) => a.id === idAtlet) ?? daftarNama[0];
+  const [tarik, setTarik] = useState<{ sibuk: boolean; ok?: boolean; teks?: string }>({ sibuk: false });
+  async function tarikData() {
+    if (!atletTerpilih) return;
+    setTarik({ sibuk: true });
+    const r = await tarikGarmin(atletTerpilih.id, hariIniTim());
+    setTarik({ sibuk: false, ok: r.ok, teks: r.ok ? "Data ditarik" : r.pesan.includes("belum terhubung") ? "Belum terhubung. Atur di Integrasi Device > Garmin." : r.pesan });
+  }
 
   const ctx: AppCtx = {
     svc: demo.svc,
@@ -207,6 +215,20 @@ function Aplikasi({
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                className="tarik-data"
+                disabled={!atletTerpilih || tarik.sibuk}
+                onClick={() => void tarikData()}
+                title={tarik.teks}
+              >
+                {tarik.sibuk ? "Menarik…" : "Tarik data"}
+              </button>
+              {tarik.teks && (
+                <span className={`tarik-info ${tarik.ok ? "ok" : ""}`} role="status">
+                  {tarik.teks}
+                </span>
+              )}
             </div>
           </header>
           <main className="konten" key={actor.userId}>

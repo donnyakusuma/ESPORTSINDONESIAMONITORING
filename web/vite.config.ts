@@ -6,6 +6,13 @@ import { garminServer } from "./garmin-server.js";
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [react(), garminServer()],
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Server Whoop (folder whoop-esport, port 3200). Jalur /api/garmin ditangani plugin Garmin, bukan proxy.
+    proxy: {
+      "/whoop": "http://localhost:3200",
+      "/api/athletes": "http://localhost:3200",
+    },
+  },
   build: { outDir: "../dist-web", emptyOutDir: true },
 });
