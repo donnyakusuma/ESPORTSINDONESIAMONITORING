@@ -11,6 +11,36 @@ npm run typecheck # backend + frontend
 npm run dev       # prototipe UI web di http://localhost:5173
 ```
 
+## Menjalankan di komputer lain
+
+```bash
+git clone https://github.com/donnyakusuma/esportsindonesiamonitoring.git
+cd esportsindonesiamonitoring
+npm install
+npm run dev        # http://localhost:5173
+```
+
+Cukup itu. Dashboard langsung menampilkan data yang sama: ekspor Garmin dan **snapshot data Whoop**
+([web/src/data/whoop-snapshot.json](web/src/data/whoop-snapshot.json)) ikut ada di repo. Snapshot dipakai otomatis
+bila server Whoop lokal tidak aktif.
+
+Yang **tidak** ikut di repo (rahasia / khusus komputer): `.env`, token Whoop/Garmin, dan folder `data/` server.
+
+### Menyambungkan Whoop langsung (opsional)
+
+Server Whoop ada di [servers/whoop-esport/](servers/whoop-esport/) (OAuth 2.0 resmi, port 3201, dialihkan oleh proxy Vite).
+
+```bash
+cd servers/whoop-esport
+npm install
+cp .env.example .env     # isi PORT=3201, TOKEN_ENC_KEY (openssl rand -hex 32), dan WHOOP_REDIRECT_URI
+npm run dev
+```
+
+Lalu buka **Integrasi Device > Whoop** di aplikasi dan ikuti panduannya (Client ID/Secret dari developer-dashboard.whoop.com).
+Akun yang terhubung di satu komputer tidak otomatis terhubung di komputer lain, karena token disimpan lokal.
+Untuk menyegarkan snapshot: ambil `/api/athletes/<id>/records?days=90&limit=2000` dari server Whoop lalu simpan ke berkas snapshot.
+
 ## Prototipe UI web
 
 Frontend React + Vite ada di [web/](web/). Karena HTTP API dan penyimpanan

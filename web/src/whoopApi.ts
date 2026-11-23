@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import snapshotWhoop from "./data/whoop-snapshot.json";
 
 /** Klien kecil untuk server whoop-esport (lewat proxy Vite). */
 export type StatusWhoop = { connected: boolean; needsReconnect?: boolean; whoopUserId?: string; connectedAt?: string };
@@ -65,6 +66,11 @@ export function useWhoopAtlet(athleteId: string | null, versi = 0) {
 
 // ───────────────────────── Rekaman mentah (diseragamkan oleh harmonizer di dataAtlet.ts) ─────────────────────────
 
+/** Snapshot data Whoop yang ikut di repo; dipakai bila server Whoop lokal tidak aktif atau akun belum terhubung di komputer ini. */
+function cadangan(athleteId: string): RekamanWhoop[] {
+  return snapshotWhoop.atletId === athleteId ? (snapshotWhoop.rekaman as RekamanWhoop[]) : [];
+}
+
 export type RekamanWhoop = Record<string, unknown> & { type: string };
 
 /**
@@ -84,10 +90,11 @@ export function useWhoopRekaman(athleteId: string | null, versi = 0) {
     const muat = async () => {
       try {
         const status = await whoop.status(athleteId);
-        const rekaman = status.connected ? await ambilJson<RekamanWhoop[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=42&limit=1000`) : [];
+        const rekaman = status.connected ? await ambilJson<RekamanWhoop[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=42&limit=1000`) : cadangan(athleteId);
         if (!batal) setHasil({ status, rekaman, memuat: false });
       } catch {
-        if (!batal) setHasil({ status: null, rekaman: [], memuat: false });
+        // Server Whoop tidak aktif (mis. di komputer lain): pakai snapshot agar tampilan sama.
+        if (!batal) setHasil({ status: null, rekaman: cadangan(athleteId), memuat: false });
       }
     };
     void muat();

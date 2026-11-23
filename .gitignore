@@ -3,3 +3,7 @@ dist/
 *.log
 .DS_Store
 dist-web/
+# Rahasia dan data lokal server integrasi: JANGAN di-commit
+.env
+servers/*/data/
+servers/*/node_modules/
