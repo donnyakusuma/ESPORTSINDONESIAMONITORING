@@ -48,7 +48,6 @@ export function HalamanAtlet({ halaman, pindah }: { halaman: HalamanAtlet; pinda
       return (
         <>
           <Judul judul="Check-in pagi" sub="Isi setiap pagi sebelum latihan. Jawaban jujur membantu staf menyesuaikan beban latihan Anda." />
-          <PersetujuanDiperlukan />
           <div className="card" style={{ maxWidth: 820 }}>
             <FormCheckIn />
           </div>
@@ -96,7 +95,6 @@ function HariIni({ pindah }: { pindah(h: HalamanAtlet): void }) {
   return (
     <>
       <Judul judul="Hari ini" sub={fmtTanggal(hariIni)} />
-      <PersetujuanDiperlukan />
       <div className="card ringkas">
         <CincinReadiness skor={skor.ok ? skor.data.readiness : null} status={skor.ok ? skor.data.status : "abu_abu"} />
         <div className="stack" style={{ flex: "1 1 280px" }}>
@@ -150,30 +148,6 @@ function HariIni({ pindah }: { pindah(h: HalamanAtlet): void }) {
         </div>
       </div>
     </>
-  );
-}
-
-/**
- * Menggantikan halaman Persetujuan Data: hanya muncul bila persetujuan
- * Kuesioner belum berlaku, karena tanpa itu Check-in ditolak.
- */
-function PersetujuanDiperlukan() {
-  const { svc, actor } = useApp();
-  const r = svc.persetujuanSaya(actor);
-  if (!r.ok) return null;
-  const kuesioner = r.data.persetujuan.find((p) => p.jenis === "kuesioner");
-  if (!kuesioner || kuesioner.berlaku) return null;
-  const menungguWali = kuesioner.granted && r.data.wali && !r.data.wali.disetujuiAt;
-
-  return (
-    <div className="card stack persetujuan-perlu">
-      <h2>Persetujuan data belum dicatat</h2>
-      <p className="ink-2">
-        {menungguWali
-          ? "Karena Anda berusia di bawah 18 tahun, data baru diproses setelah persetujuan wali dicatat oleh Super admin."
-          : "Check-in dan skor readiness baru diproses setelah Super admin mencatat persetujuan data sesuai kontrak Anda. Hubungi manajer tim."}
-      </p>
-    </div>
   );
 }
 

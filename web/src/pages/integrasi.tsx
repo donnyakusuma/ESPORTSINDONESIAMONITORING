@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { IntegrasiGarmin, JenisDataGarmin } from "../../../src/index.js";
 import { simulasiSinkronGarmin } from "../demo.js";
+import { putusGarmin, masukGarmin, tarikGarmin, useGarminLive } from "../garminLive.js";
 import { IkonGarmin, METRIK_GARMIN } from "../garmin.js";
 import { fmtWaktu, Info, inisial, Pesan, useAksi, useApp } from "../ui.js";
 
@@ -48,6 +49,8 @@ export function HalamanIntegrasiGarmin() {
         </span>
       </Info>
       <Pesan umpan={aksi.umpan} />
+
+      <LoginGarmin atlet={atlet.map((a) => ({ id: a.athleteId, nama: a.nama }))} />
 
       <FormKredensial key={pengaturan?.diubahAt ?? "baru"} pengaturan={pengaturan} jalankan={aksi.jalankan} setUmpan={aksi.setUmpan} />
 
@@ -337,5 +340,86 @@ function AlamatSalin({ label, nilai }: { label: string; nilai: string }) {
         </button>
       </span>
     </div>
+  );
+}
+
+/**
+ * Tarik data langsung dari Garmin Connect memakai username dan password akun
+ * Garmin atlet. Ini jalur tidak resmi lewat server lokal (npm run dev); password
+ * hanya dikirim ke server lokal itu lalu ke Garmin, dan tidak disimpan.
+ */
+function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
+  const { hariIni } = useApp();
+  const live = useGarminLive();
+  const [id, setId] = useState(atlet[0]?.id ?? "");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [sibuk, setSibuk] = useState(false);
+  const [umpan, setUmpan] = useState<{ ok: boolean; teks: string } | null>(null);
+  const terhubung = live[id];
+
+  async function jalan(f: () => Promise<{ ok: boolean; pesan: string }>) {
+    setSibuk(true);
+    setUmpan(null);
+    const r = await f();
+    setUmpan({ ok: r.ok, teks: r.pesan });
+    if (r.ok) setPassword("");
+    setSibuk(false);
+  }
+
+  return (
+    <section className="setelan">
+      <div className="setelan-ket">
+        <h2>Akun Garmin Connect</h2>
+        <p>Masukkan username dan password Garmin Connect atlet untuk menarik statistik kesehatannya ke Dashboard.</p>
+      </div>
+      <form
+        className="card stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void jalan(() => masukGarmin(id, username, password, hariIni));
+        }}
+      >
+        <label className="field">
+          <span>Atlet</span>
+          <select value={id} onChange={(e) => setId(e.target.value)}>
+            {atlet.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nama}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Username Garmin (email)</span>
+          <input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Password Garmin</span>
+          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </label>
+        <div className="row">
+          <button className="btn utama" disabled={sibuk || !id}>
+            {sibuk ? "Menghubungkan…" : terhubung ? "Masuk ulang & tarik data" : "Masuk & tarik data"}
+          </button>
+          {terhubung && (
+            <>
+              <button type="button" className="btn" disabled={sibuk} onClick={() => void jalan(() => tarikGarmin(id, hariIni))}>
+                Tarik ulang
+              </button>
+              <button type="button" className="btn" disabled={sibuk} onClick={() => void putusGarmin(id)}>
+                Putuskan
+              </button>
+            </>
+          )}
+        </div>
+        {umpan && <Info jenis={umpan.ok ? "info" : "peringatan"}>{umpan.teks}</Info>}
+        {terhubung && <p className="muted kecil">Terhubung ke akun {terhubung.nama}. Lihat hasilnya di Dashboard.</p>}
+        <p className="muted kecil">
+          Jalur tidak resmi: Garmin tidak menyediakan login username/password untuk umum, sehingga bisa gagal bila akun memakai verifikasi
+          dua langkah atau Garmin mengubah sistem masuknya. Password tidak disimpan; sesi hilang saat server dimatikan.
+        </p>
+      </form>
+    </section>
   );
 }

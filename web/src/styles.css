@@ -274,7 +274,6 @@ fieldset.akun-masuk .hint { color: var(--muted); font-size: 12px; }
   background: rgba(0, 0, 0, 0.7); color: #fff; cursor: pointer; font-size: 13px;
 }
 .hubungkan-garmin { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; background: var(--field); border-radius: 10px; padding: 14px 16px; }
-.persetujuan-perlu { box-shadow: inset 3px 0 0 var(--kuning); }
 
 /* ───────── Indeks Performa (lampu lalu lintas) ───────── */
 
@@ -529,3 +528,27 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .garmin-nilai { font-size: 20px; }
   .garis { width: 72px; }
 }
+
+/* Dashboard */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px; }
+.kpi { display: flex; flex-direction: column; gap: 4px; }
+.kpi-label { color: var(--sub); font-size: 0.85rem; }
+.kpi-nilai { font-size: 2rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpi-nilai small { font-size: 0.9rem; font-weight: 500; color: var(--sub); }
+.kpi-catatan { color: var(--sub); font-size: 0.85rem; }
+.bar-tumpuk { display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; margin-bottom: 14px; }
+.bb-skala { position: relative; height: 22px; border-radius: 6px; background: var(--surface-2); margin-bottom: 6px; }
+.bb-skala span { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: var(--accent); }
+.bb-label { display: flex; justify-content: space-between; color: var(--sub); font-size: 0.8rem; margin-bottom: 14px; }
+.legenda { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.legenda li { display: flex; align-items: center; gap: 10px; }
+.legenda li > span { flex: 1; color: var(--ink-2); }
+.legenda i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.legenda b, .legenda small { font-variant-numeric: tabular-nums; }
+.legenda small { width: 40px; text-align: right; color: var(--sub); }
+
+.pilih-atlet { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pilih-atlet label { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 22px; min-height: 44px; padding: 0 6px 0 16px; }
+.pilih-atlet label > span:first-child { color: var(--sub); font-size: 12px; }
+.pilih-atlet select { background: transparent; border: 0; min-height: 40px; padding: 0 8px; max-width: 260px; font-weight: 600; }
+.pilih-atlet select option { background: var(--surface); }
