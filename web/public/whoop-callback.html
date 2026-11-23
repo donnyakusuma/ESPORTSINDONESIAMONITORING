@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Menghubungkan WHOOP</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #5e0a14; color: #fff; font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 520px; padding: 24px; text-align: center; }
+  a { color: #ffc940; }
+  code { background: #1b0608; padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Menghubungkan WHOOP…</h1>
+  <p id="pesan">Meneruskan ke server lokal.</p>
+</main>
+<script>
+  // Redirect URL WHOOP harus https, jadi WHOOP kembali ke halaman ini (GitHub Pages), lalu
+  // halaman ini meneruskan code & state ke server whoop-esport di komputer yang sama.
+  // Kode sekali pakai dan tak berguna tanpa Client Secret, yang hanya ada di server lokal.
+  var tujuan = "http://localhost:3201/whoop/callback" + location.search;
+  if (!location.search) {
+    document.getElementById("pesan").textContent = "Halaman ini hanya dipakai saat menghubungkan akun WHOOP.";
+  } else {
+    setTimeout(function () {
+      document.getElementById("pesan").innerHTML =
+        'Server lokal tidak terbuka? Pastikan <code>npm run dev</code> berjalan di folder whoop-esport, lalu <a href="' + tujuan.replace(/"/g, "&quot;") + '">coba lagi</a>.';
+    }, 4000);
+    location.replace(tujuan);
+  }
+</script>
+</body>
+</html>

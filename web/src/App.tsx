@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { tarikGarmin } from "./garminLive.js";
+import { whoop } from "./whoopApi.js";
+import { HalamanAbout } from "./pages/about.js";
 import { Dashboard } from "./dashboard.js";
 import { buatDemo, hariIniTim } from "./demo.js";
 import { HalamanAtlet, MENU_ATLET } from "./pages/atlet.js";
@@ -27,6 +29,7 @@ const IKON_MENU: Record<string, string> = {
 
 type Halaman =
   | { peran: "dashboard" }
+  | { peran: "about" }
   | { peran: "atlet"; h: HalamanAtlet }
   | { peran: "staf"; h: HalamanStaf }
   | { peran: "manajer"; h: HalamanManajer };
@@ -87,11 +90,31 @@ function Aplikasi({
   const [idAtlet, setIdAtlet] = useState("");
   const atletTerpilih = daftarNama.find((a) => a.id === idAtlet) ?? daftarNama[0];
   const [tarik, setTarik] = useState<{ sibuk: boolean; ok?: boolean; teks?: string }>({ sibuk: false });
+  const [versiWhoop, setVersiWhoop] = useState(0);
+  // Pesan sesudah kembali dari halaman login Whoop (?whoop=terhubung|ditolak|gagal|belum-diatur).
+  const [hasilWhoop, setHasilWhoop] = useState(() => new URLSearchParams(location.search).get("whoop"));
+  useEffect(() => {
+    if (hasilWhoop) history.replaceState(null, "", location.pathname);
+  }, []);
+
+  /** Tarik dari semua perangkat yang terhubung untuk atlet terpilih (Garmin dan/atau Whoop). */
   async function tarikData() {
     if (!atletTerpilih) return;
     setTarik({ sibuk: true });
-    const r = await tarikGarmin(atletTerpilih.id, hariIniTim());
-    setTarik({ sibuk: false, ok: r.ok, teks: r.ok ? "Data ditarik" : r.pesan.includes("belum terhubung") ? "Belum terhubung. Atur di Integrasi Device > Garmin." : r.pesan });
+    const [g, w] = await Promise.all([
+      tarikGarmin(atletTerpilih.id, hariIniTim()),
+      whoop
+        .status(atletTerpilih.id)
+        .then((s) => (s.connected ? whoop.sinkron(atletTerpilih.id).then(() => true) : false))
+        .catch(() => false),
+    ]);
+    setVersiWhoop((v) => v + 1);
+    const berhasil = [g.ok && "Garmin", w && "Whoop"].filter(Boolean);
+    setTarik({
+      sibuk: false,
+      ok: berhasil.length > 0,
+      teks: berhasil.length ? `Data ${berhasil.join(" & ")} ditarik` : "Belum ada perangkat terhubung. Atur di Integrasi Device.",
+    });
   }
 
   const ctx: AppCtx = {
@@ -159,6 +182,9 @@ function Aplikasi({
                 </button>
               ))}
           </nav>
+          <button className={`tab-about ${halaman.peran === "about" ? "aktif" : ""}`} onClick={() => setHalaman({ peran: "about" })}>
+            About
+          </button>
           <div className="side-foot">
             <div className="row spread saklar-contoh">
               <span>
@@ -232,7 +258,25 @@ function Aplikasi({
             </div>
           </header>
           <main className="konten" key={actor.userId}>
-            {halaman.peran === "dashboard" && <Dashboard namaAtlet={atletTerpilih?.nama ?? null} idAtlet={atletTerpilih?.id ?? null} />}
+            {hasilWhoop && (
+              <div className={`spanduk-whoop ${hasilWhoop === "terhubung" ? "ok" : "gagal"}`} role="status">
+                <span>
+                  {
+                    {
+                      terhubung: "Whoop berhasil terhubung. Data 30 hari terakhir sedang ditarik dan akan tersinkron otomatis setiap jam.",
+                      ditolak: "Akses Whoop tidak disetujui. Coba hubungkan lagi dari Integrasi Device > Whoop.",
+                      gagal: "Whoop gagal terhubung. Periksa Client ID/Secret dan Redirect URI, lalu coba lagi.",
+                      "belum-diatur": "Whoop belum diatur. Isi Client ID dan Client Secret di Integrasi Device > Whoop.",
+                    }[hasilWhoop] ?? "Whoop: " + hasilWhoop
+                  }
+                </span>
+                <button className="link" onClick={() => setHasilWhoop(null)}>
+                  Tutup
+                </button>
+              </div>
+            )}
+            {halaman.peran === "about" && <HalamanAbout />}
+            {halaman.peran === "dashboard" && <Dashboard namaAtlet={atletTerpilih?.nama ?? null} idAtlet={atletTerpilih?.id ?? null} versi={versiWhoop} />}
             {halaman.peran === "atlet" && <HalamanAtlet halaman={halaman.h} pindah={(h) => setHalaman({ peran: "atlet", h })} />}
             {halaman.peran === "staf" && <HalamanStaf halaman={halaman.h} pindah={(h) => setHalaman({ peran: "staf", h })} />}
             {halaman.peran === "manajer" && <HalamanManajer halaman={halaman.h} />}

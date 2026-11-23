@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { KartuWhoop } from "../KartuWhoop.js";
+import { type ConfigWhoop, useWhoopAtlet, whoop } from "../whoopApi.js";
 import type { IntegrasiGarmin, JenisDataGarmin } from "../../../src/index.js";
 import { simulasiSinkronGarmin } from "../demo.js";
 import { putusGarmin, masukGarmin, tarikGarmin, useGarminLive } from "../garminLive.js";
@@ -320,7 +322,7 @@ function FormKredensial({
   );
 }
 
-function AlamatSalin({ label, nilai }: { label: string; nilai: string }) {
+export function AlamatSalin({ label, nilai }: { label: string; nilai: string }) {
   const [tersalin, setTersalin] = useState(false);
   return (
     <div className="field">
@@ -448,57 +450,42 @@ export function HalamanIntegrasiDevice() {
   );
 }
 
-type StatusWhoop = { connected: boolean; needsReconnect?: boolean; whoopUserId?: string; connectedAt?: string };
-type RingkasanWhoop = {
-  recovery: { n: number; avgScore: number | null; avgHrvRmssdMs: number | null; avgRestingHr: number | null };
-  sleep: { n: number; avgPerformancePct: number | null };
-  cycle: { n: number; avgDayStrain: number | null };
-  workouts: { n: number };
-};
-
-const f = (n: number | null | undefined, s = "") => (n === null || n === undefined ? "–" : `${n}${s}`);
-
 /**
- * Whoop lewat server lokal whoop-esport (OAuth 2.0 resmi, port 3200, dialihkan oleh proxy Vite).
- * Butuh WHOOP_CLIENT_ID dan WHOOP_CLIENT_SECRET dari Whoop Developer Dashboard di .env server itu.
+ * Whoop lewat server lokal whoop-esport (OAuth 2.0 resmi, port 3201, dialihkan oleh proxy Vite).
+ * Langkah 1 mengisi Client ID/Secret dari Whoop Developer Dashboard; langkah 2 menghubungkan akun atlet.
+ * Setelah terhubung, server menarik 30 hari ke belakang lalu menyinkronkan otomatis setiap jam.
  */
 function TabWhoop() {
-  const r = useApp().svc.integrasiGarmin(useApp().actor);
+  const { svc, actor } = useApp();
+  const r = svc.integrasiGarmin(actor);
   const atlet = r.ok ? r.data.atlet.map((a) => ({ id: a.athleteId, nama: a.nama })) : [];
   const [id, setId] = useState(atlet[0]?.id ?? "");
-  const [status, setStatus] = useState<StatusWhoop | null>(null);
-  const [ringkas, setRingkas] = useState<RingkasanWhoop | null>(null);
+  const [versi, setVersi] = useState(0);
+  const [config, setConfig] = useState<ConfigWhoop | null>(null);
+  const [configMati, setConfigMati] = useState(false);
+  const { status, ringkasan, mati } = useWhoopAtlet(id || null, versi);
   const [sibuk, setSibuk] = useState(false);
   const [pesan, setPesan] = useState<{ ok: boolean; teks: string } | null>(null);
-  const [mati, setMati] = useState(false);
 
-  async function muat(athleteId: string) {
-    try {
-      const s = (await (await fetch(`/api/athletes/${encodeURIComponent(athleteId)}/status`)).json()) as StatusWhoop;
-      setStatus(s);
-      setMati(false);
-      setRingkas(s.connected ? ((await (await fetch(`/api/athletes/${encodeURIComponent(athleteId)}/summary?days=7`)).json()) as RingkasanWhoop) : null);
-    } catch {
-      setMati(true);
-      setStatus(null);
-      setRingkas(null);
-    }
-  }
+  const muatConfig = () =>
+    whoop
+      .config()
+      .then((c) => (setConfig(c), setConfigMati(false)))
+      .catch(() => setConfigMati(true));
   useEffect(() => {
-    if (id) void muat(id);
-  }, [id]);
+    void muatConfig();
+  }, []);
 
-  async function aksi(f: () => Promise<Response>, ok: string) {
+  async function aksi(f: () => Promise<unknown>, ok: string) {
     setSibuk(true);
     setPesan(null);
     try {
-      const res = await f();
-      const j = await res.json().catch(() => ({}));
-      setPesan(res.ok ? { ok: true, teks: ok } : { ok: false, teks: (j as { error?: string }).error ?? `Gagal (${res.status})` });
-    } catch {
-      setPesan({ ok: false, teks: "Server Whoop tidak merespons." });
+      await f();
+      setPesan({ ok: true, teks: ok });
+    } catch (e) {
+      setPesan({ ok: false, teks: e instanceof Error ? e.message : "Server Whoop tidak merespons." });
     }
-    await muat(id);
+    setVersi((v) => v + 1);
     setSibuk(false);
   }
 
@@ -511,63 +498,125 @@ function TabWhoop() {
         </div>
         <span className={`status ${status?.connected ? "hijau" : "abu_abu"}`}>{status?.connected ? "Terhubung" : "Belum terhubung"}</span>
       </div>
-      {mati && (
+
+      {(configMati || mati) && (
         <Info jenis="peringatan">
           <span>
-            Server Whoop tidak aktif. Jalankan <code>npm run dev</code> di folder <code>whoop-esport</code> (port 3200), lalu isi
-            WHOOP_CLIENT_ID dan WHOOP_CLIENT_SECRET di <code>.env</code>-nya.
+            Server Whoop tidak aktif. Buka Terminal, jalankan <code>cd ~/Documents/whoop-esport &amp;&amp; npm run dev</code>, lalu muat ulang
+            halaman ini.
           </span>
         </Info>
       )}
-      <section className="card stack">
-        <label className="field">
-          <span>Atlet</span>
-          <select value={id} onChange={(e) => setId(e.target.value)}>
-            {atlet.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nama}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="row">
-          {!status?.connected && (
-            <a className="btn utama" href={`/whoop/connect?athleteId=${encodeURIComponent(id)}`}>
-              {status?.needsReconnect ? "Hubungkan ulang Whoop" : "Hubungkan Whoop"}
-            </a>
-          )}
-          {status?.connected && (
-            <>
-              <button className="btn utama" disabled={sibuk} onClick={() => void aksi(() => fetch(`/api/athletes/${encodeURIComponent(id)}/sync?days=7`, { method: "POST" }), "Data Whoop 7 hari terakhir ditarik.")}>
-                {sibuk ? "Menarik…" : "Tarik data"}
-              </button>
-              <button className="btn" disabled={sibuk} onClick={() => void aksi(() => fetch(`/whoop/disconnect/${encodeURIComponent(id)}`, { method: "DELETE" }), "Koneksi Whoop diputus.")}>
-                Putuskan
-              </button>
-            </>
-          )}
-        </div>
-        {pesan && <Info jenis={pesan.ok ? "info" : "peringatan"}>{pesan.teks}</Info>}
-        {status?.connected && (
+
+      {config && !config.configured && <SetelWhoop redirectUri={config.redirectUri} selesai={() => void muatConfig()} />}
+
+      {config?.configured && (
+        <section className="card stack">
+          <label className="field">
+            <span>Atlet</span>
+            <select value={id} onChange={(e) => setId(e.target.value)}>
+              {atlet.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nama}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="row">
+            {!status?.connected && (
+              <a className="btn utama" href={whoop.urlHubungkan(id)}>
+                {status?.needsReconnect ? "Hubungkan ulang Whoop" : "Hubungkan Whoop"}
+              </a>
+            )}
+            {status?.connected && (
+              <>
+                <button className="btn utama" disabled={sibuk} onClick={() => void aksi(() => whoop.sinkron(id, 7), "Data Whoop 7 hari terakhir ditarik.")}>
+                  {sibuk ? "Menarik…" : "Tarik sekarang"}
+                </button>
+                <button className="btn" disabled={sibuk} onClick={() => void aksi(() => whoop.putus(id), "Koneksi Whoop diputus.")}>
+                  Putuskan
+                </button>
+              </>
+            )}
+          </div>
+          {pesan && <Info jenis={pesan.ok ? "info" : "peringatan"}>{pesan.teks}</Info>}
           <p className="muted kecil">
-            Terhubung{status.connectedAt ? ` sejak ${fmtWaktu(status.connectedAt)}` : ""} · ID Whoop {status.whoopUserId}
+            {status?.connected
+              ? `Terhubung${status.connectedAt ? ` sejak ${fmtWaktu(status.connectedAt)}` : ""} · ID Whoop ${status.whoopUserId}. Data tersinkron otomatis setiap jam; tombol "Tarik sekarang" untuk menarik langsung.`
+              : "Tombol Hubungkan membuka halaman login Whoop. Masuk dengan akun Whoop atlet ini lalu setujui akses; Anda akan kembali ke aplikasi ini."}
           </p>
-        )}
-      </section>
-      {ringkas && (
-        <section className="kpi-grid" aria-label="Ringkasan 7 hari">
-          <div className="card kpi"><span className="kpi-label">Recovery rata-rata</span><b className="kpi-nilai">{f(ringkas.recovery.avgScore, "%")}</b><span className="kpi-catatan">{ringkas.recovery.n} hari</span></div>
-          <div className="card kpi"><span className="kpi-label">HRV rata-rata</span><b className="kpi-nilai">{f(ringkas.recovery.avgHrvRmssdMs)}<small> ms</small></b><span className="kpi-catatan">Istirahat {f(ringkas.recovery.avgRestingHr, " bpm")}</span></div>
-          <div className="card kpi"><span className="kpi-label">Performa tidur</span><b className="kpi-nilai">{f(ringkas.sleep.avgPerformancePct, "%")}</b><span className="kpi-catatan">{ringkas.sleep.n} malam</span></div>
-          <div className="card kpi"><span className="kpi-label">Strain harian</span><b className="kpi-nilai">{f(ringkas.cycle.avgDayStrain)}</b><span className="kpi-catatan">{ringkas.workouts.n} latihan</span></div>
         </section>
       )}
-      <Info>
-        <span>
-          Alur resmi Whoop (OAuth 2.0). Redirect URL <code>http://localhost:3200/whoop/callback</code> harus didaftarkan di Whoop Developer
-          Dashboard; bila Whoop mewajibkan HTTPS, pakai tunnel dan ubah <code>WHOOP_REDIRECT_URI</code>.
-        </span>
-      </Info>
+
+      {ringkasan && (
+        <>
+          <h3>7 hari terakhir</h3>
+          <KartuWhoop r={ringkasan} />
+        </>
+      )}
     </>
+  );
+}
+
+/** Langkah sekali saja: daftarkan aplikasi di Whoop lalu tempel Client ID/Secret. Disimpan ke .env server lokal. */
+function SetelWhoop({ redirectUri, selesai }: { redirectUri: string; selesai(): void }) {
+  const [clientId, setClientId] = useState("");
+  const [secret, setSecret] = useState("");
+  const [sibuk, setSibuk] = useState(false);
+  const [galat, setGalat] = useState("");
+
+  return (
+    <form
+      className="card stack"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setSibuk(true);
+        setGalat("");
+        try {
+          await whoop.simpanConfig(clientId, secret);
+          setSecret("");
+          selesai();
+        } catch (err) {
+          setGalat(err instanceof Error ? err.message : "Gagal menyimpan.");
+        }
+        setSibuk(false);
+      }}
+    >
+      <h3>Langkah 1 · Daftarkan aplikasi di Whoop (sekali saja)</h3>
+      <ol className="langkah">
+        <li>
+          Buka{" "}
+          <a href="https://developer-dashboard.whoop.com" target="_blank" rel="noreferrer">
+            developer-dashboard.whoop.com
+          </a>{" "}
+          dan masuk dengan akun Whoop Anda.
+        </li>
+        <li>Buat Team bila diminta, lalu klik <b>Create App</b>.</li>
+        <li>
+          Isi nama aplikasi bebas. Pada <b>Redirect URIs</b> masukkan persis:
+          <AlamatSalin label="Redirect URI" nilai={redirectUri} />
+        </li>
+        <li>
+          Centang semua scope: <code>read:recovery</code>, <code>read:cycles</code>, <code>read:sleep</code>, <code>read:workout</code>,{" "}
+          <code>read:profile</code>, <code>read:body_measurement</code>.
+        </li>
+        <li>Simpan, lalu salin <b>Client ID</b> dan <b>Client Secret</b> ke form di bawah.</li>
+      </ol>
+      <label className="field">
+        <span>Client ID</span>
+        <input value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="off" required />
+      </label>
+      <label className="field">
+        <span>Client Secret</span>
+        <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" required />
+      </label>
+      {galat && <Info jenis="peringatan">{galat}</Info>}
+      <div className="row">
+        <button className="btn utama" disabled={sibuk}>
+          {sibuk ? "Menyimpan…" : "Simpan"}
+        </button>
+      </div>
+      <p className="muted kecil">Disimpan hanya di file .env server Whoop di komputer ini, tidak dikirim ke tempat lain.</p>
+    </form>
   );
 }

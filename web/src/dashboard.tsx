@@ -1,5 +1,7 @@
 import { CSV_GARMIN, TANGGAL_GARMIN } from "./data/garmin-health-stats.js";
 import { useGarminLive } from "./garminLive.js";
+import { KartuWhoop } from "./KartuWhoop.js";
+import { useWhoopAtlet } from "./whoopApi.js";
 import { fmtTanggal } from "./ui.js";
 
 type Baris = Record<string, string>;
@@ -35,8 +37,15 @@ function Kpi({ label, nilai, satuan, catatan }: { label: string; nilai: string; 
   );
 }
 
-export function Dashboard({ namaAtlet, idAtlet }: { namaAtlet: string | null; idAtlet: string | null }) {
+export function Dashboard({ namaAtlet, idAtlet, versi = 0 }: { namaAtlet: string | null; idAtlet: string | null; versi?: number }) {
   const live = useGarminLive()[idAtlet ?? ""];
+  const wh = useWhoopAtlet(idAtlet, versi);
+  const bagianWhoop = wh.ringkasan && (
+    <section className="stack" aria-label="Whoop">
+      <h2>Whoop · 7 hari terakhir</h2>
+      <KartuWhoop r={wh.ringkasan} />
+    </section>
+  );
   const semua = parseCsv(CSV_GARMIN);
   const atlet = semua.filter((b) => b.Name !== "All Athletes");
   // Cocokkan nama terpilih dengan ekspor: semua kata nama di ekspor harus ada di nama atlet (mis. "Muhammad Ilham" ~ "Muhammad Saieful Ilham").
@@ -55,6 +64,7 @@ export function Dashboard({ namaAtlet, idAtlet }: { namaAtlet: string | null; id
           <p>Belum ada data Garmin untuk {namaAtlet ?? "atlet ini"} di ekspor {fmtTanggal(TANGGAL_GARMIN, { tahun: true })}.</p>
           <p className="muted kecil">Atlet dalam ekspor: {atlet.map((a) => a.Name).join(", ") || "tidak ada"}.</p>
         </div>
+        {bagianWhoop}
       </>
     );
   }
@@ -106,6 +116,8 @@ export function Dashboard({ namaAtlet, idAtlet }: { namaAtlet: string | null; id
         <Kpi label="Body Battery" nilai={bbMax === null ? "–" : `${bbMin ?? "–"}–${bbMax}`} catatan={`Terpakai ${fmt(angka(g("Body Battery (Drain)")))} poin`} />
         <Kpi label="Total kalori" nilai={fmt(angka(g("Total Calories (kcal)")))} satuan="kkal" />
       </div>
+
+      {bagianWhoop}
 
       <div className="grid-2">
         <section className="card" aria-label="Distribusi stres">
