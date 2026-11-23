@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Athlete, JenisKelamin } from "../../../src/index.js";
 import { usiaPadaTanggal } from "../../../src/modules/akses.js";
+import { GarminDiKartu } from "../garminLogin.js";
 import { Lampu } from "../performa.js";
 import { CincinReadiness, fmtTanggal, Info, inisial, Jendela, Pesan, StatusBadge, useAksi, useApp } from "../ui.js";
 
@@ -153,6 +154,7 @@ export function DaftarAtlet({ bukaReadiness }: { bukaReadiness?(athleteId: strin
                 </>
               )}
             </dl>
+            {bisaUbah && !a.archived && <GarminDiKartu atletId={a.id} nama={a.nama} />}
             <div className="kartu-aksi">
               {bisaUbah && !a.archived && (
                 <button

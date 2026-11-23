@@ -123,6 +123,39 @@ function rinciGarmin(b: Baris): RinciGarmin {
   };
 }
 
+/** Ringkasan aktivitas Garmin Connect, sesuai bentuk yang dikirim server lokal (garmin-tarik.ts). */
+export interface AktivitasGarminRingkas {
+  id: number;
+  nama: string;
+  jenis: string;
+  /** Waktu mulai lokal "YYYY-MM-DD HH:mm:ss". */
+  mulai: string;
+  /** Waktu mulai ISO UTC. */
+  mulaiIso: string | null;
+  durasiDetik: number | null;
+  kalori: number | null;
+  hrRata: number | null;
+  hrMaks: number | null;
+}
+
+/** Aktivitas Garmin Connect -> bentuk activity summary yang dikenali harmonizer (ALIAS.aktivitas). */
+function aktivitasKeSummary(a: AktivitasGarminRingkas) {
+  if (!a.mulaiIso || a.durasiDetik === null) return null;
+  const utcMs = Date.parse(a.mulaiIso);
+  // Selisih jam lokal dan UTC memberi offset zona waktu atlet saat aktivitas.
+  const lokalMs = Date.parse(`${a.mulai.replace(" ", "T")}Z`);
+  return {
+    activityId: a.id,
+    activityType: a.nama || a.jenis,
+    startTimeInSeconds: Math.round(utcMs / 1000),
+    startTimeOffsetInSeconds: Number.isFinite(lokalMs) ? Math.round((lokalMs - utcMs) / 1000) : null,
+    durationInSeconds: Math.round(a.durasiDetik),
+    averageHeartRateInBeatsPerMinute: a.hrRata,
+    maxHeartRateInBeatsPerMinute: a.hrMaks,
+    activeKilocalories: a.kalori,
+  };
+}
+
 // ───────────────────────── Susun ─────────────────────────
 
 type Rekaman = Record<string, unknown> & { type: string };
@@ -130,26 +163,41 @@ type Rekaman = Record<string, unknown> & { type: string };
 export function susunAtlet(masukan: {
   athleteId: string;
   whoop: Rekaman[];
-  garmin: { baris: Baris; tanggal: string } | null;
+  /** Satu baris per hari: ekspor CSV (1 hari) atau tarikan Garmin Connect (7 hari). */
+  garmin: { baris: Baris; tanggal: string }[];
+  /** Aktivitas dari tarikan Garmin Connect. */
+  aktivitasGarmin?: AktivitasGarminRingkas[] | null;
 }): { hari: HariTampil[]; peringatan: string[] } {
   const per = (t: string) => masukan.whoop.filter((r) => r.type === t);
   const adaWhoop = masukan.whoop.length > 0;
-  const g = masukan.garmin;
-  if (!adaWhoop && !g) return { hari: [], peringatan: [] };
+  const hariGarmin = masukan.garmin;
+  const aktivitas = (masukan.aktivitasGarmin ?? []).map(aktivitasKeSummary).filter((a) => a !== null);
+  const adaGarmin = hariGarmin.length > 0 || aktivitas.length > 0;
+  if (!adaWhoop && !adaGarmin) return { hari: [], peringatan: [] };
 
+  // Ringkasan per hari digabung jadi satu payload Garmin (sleeps/hrv/dailies/stress per calendarDate).
+  const ringkas = hariGarmin.map((h) => garminKeSummary(h.baris, h.tanggal));
   const hasil = harmonisasi({
     athlete_id: masukan.athleteId,
     whoop: adaWhoop ? { sleeps: per("sleep"), recoveries: per("recovery"), cycles: per("cycle"), workouts: per("workout") } : null,
-    garmin: g ? garminKeSummary(g.baris, g.tanggal) : null,
+    garmin: adaGarmin
+      ? {
+          sleeps: ringkas.flatMap((r) => r.sleeps),
+          hrv: ringkas.flatMap((r) => r.hrv),
+          dailies: ringkas.flatMap((r) => r.dailies),
+          stress: ringkas.flatMap((r) => r.stress),
+          activities: aktivitas,
+        }
+      : null,
   });
 
   // Energi Total Harian Garmin: kamus meminta active + BMR. Ekspor Health Stats hanya punya "Total Calories"
   // (sudah termasuk BMR menurut Garmin Connect), jadi diisi dari sana dengan catatan asalnya.
-  if (g) {
+  for (const g of hariGarmin) {
     const tot = n(g.baris["Total Calories (kcal)"]);
     const c = hasil.catatan.find((x) => x.sumber === "garmin" && x.tanggal === g.tanggal);
     if (c && tot !== null && (c.metrik.EKT?.nilai ?? null) === null) {
-      c.metrik.EKT = { nilai: tot, unit: "kkal", sumber: "garmin", kualitas: "asli", catatan: "Total Calories dari ekspor Garmin Connect" };
+      c.metrik.EKT = { nilai: tot, unit: "kkal", sumber: "garmin", kualitas: "asli", catatan: "Total Calories dari Garmin Connect" };
     }
   }
 
@@ -166,7 +214,7 @@ export function susunAtlet(masukan: {
     if (adaMetrik) h.catatan[c.sumber] = c;
     h.aktivitas.push(...c.aktivitas);
   }
-  if (g) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
+  for (const g of hariGarmin) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
 
   // 7 hari kalender berturut-turut sampai hari data terakhir; hari kosong tetap tampil.
   const berdata = [...peta.values()].filter(adaData).map((h) => h.tanggal).sort();

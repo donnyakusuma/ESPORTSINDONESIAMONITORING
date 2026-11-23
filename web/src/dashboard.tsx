@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { susunAtlet } from "./dataAtlet.js";
 import { CSV_GARMIN, TANGGAL_GARMIN } from "./data/garmin-health-stats.js";
+import { DaftarAktivitas, EkstraGarminPanel } from "./garminEkstra.js";
 import { useGarminLive } from "./garminLive.js";
 import { PanelAtlet } from "./PanelAtlet.js";
 import { useWhoopRekaman } from "./whoopApi.js";
@@ -27,8 +28,14 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
 
   // Semua sumber diseragamkan lewat harmonizer (kamus, satuan, dan aturan tanggal yang sama).
   const { hari, peringatan } = useMemo(() => {
-    const baris = live ? { baris: live.data, tanggal: live.tanggal } : namaAtlet && barisCsvAtlet(namaAtlet) ? { baris: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN } : null;
-    return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin: baris });
+    // Garmin Connect (7 hari + aktivitas) bila sudah ditarik; selain itu baris ekspor CSV lama.
+    const csv = !live && namaAtlet ? barisCsvAtlet(namaAtlet) : undefined;
+    const garmin = live
+      ? Object.entries(live.riwayat).map(([tanggal, baris]) => ({ baris, tanggal }))
+      : csv
+        ? [{ baris: csv, tanggal: TANGGAL_GARMIN }]
+        : [];
+    return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin, aktivitasGarmin: live?.aktivitas });
   }, [idAtlet, namaAtlet, live, wh.rekaman]);
 
   return (
@@ -47,6 +54,9 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
       ) : (
         <div className="card">Belum tersinkron.</div>
       )}
+
+      {live?.ekstra && <EkstraGarminPanel e={live.ekstra} tanggal={live.tanggal} />}
+      {live && idAtlet && <DaftarAktivitas atletId={idAtlet} aktivitas={live.aktivitas} />}
     </>
   );
 }

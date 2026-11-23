@@ -102,7 +102,7 @@ function Aplikasi({
     if (!atletTerpilih) return;
     setTarik({ sibuk: true });
     const [g, w] = await Promise.all([
-      tarikGarmin(atletTerpilih.id, hariIniTim()),
+      tarikGarmin(atletTerpilih.id, hariIniTim(), atletTerpilih.nama),
       whoop
         .status(atletTerpilih.id)
         .then((s) => (s.connected ? whoop.sinkron(atletTerpilih.id).then(() => true) : false))

@@ -4,6 +4,8 @@ import { AREA_NYERI, BATAS_LAPORAN, RPE_LABELS } from "../../../src/index.js";
 import { tambahHari } from "../../../src/domain/tanggal.js";
 import { CatatanItem, Linimasa } from "../bersama.js";
 import { KartuGarmin } from "../garmin.js";
+import { putusGarmin, tarikGarmin, useStatusGarmin } from "../garminLive.js";
+import { FormLoginGarmin } from "../garminLogin.js";
 import { KartuPerforma } from "../performa.js";
 import { TrenChart } from "../TrenChart.js";
 import {
@@ -626,69 +628,84 @@ function CatatanSaya() {
 // ───────────────────────── Akun Garmin ─────────────────────────
 
 /**
- * Menghubungkan akun Garmin milik atlet sendiri. Menghubungkan sekaligus
- * memberi persetujuan Data wearable; otorisasi Garmin Connect disimulasikan.
+ * Atlet menghubungkan akun Garmin Connect-nya sendiri dengan email dan
+ * password. Password hanya dipakai untuk masuk; server menyimpan token sesi.
  */
 function KoneksiGarminSaya() {
-  const { svc, actor } = useApp();
-  const { umpan, jalankan } = useAksi();
-  const [otorisasi, setOtorisasi] = useState(false);
-  const r = svc.koneksiGarminSaya(actor);
-  if (!r.ok) return null;
-  const { integrasiAktif, koneksi } = r.data;
-  if (koneksi?.status === "terhubung") return umpan ? <Pesan umpan={umpan} /> : null;
-  const p = svc.persetujuanSaya(actor);
-  const wearableBerlaku = p.ok && !!p.data.persetujuan.find((x) => x.jenis === "wearable")?.berlaku;
+  const { actor, hariIni, nama } = useApp();
+  const id = actor.athleteId!;
+  const st = useStatusGarmin();
+  const koneksi = st.data[id];
+  const [ganti, setGanti] = useState(false);
+  const [sibuk, setSibuk] = useState(false);
+  const [umpan, setUmpan] = useState<{ ok: boolean; teks: string } | null>(null);
+  async function jalan(f: () => Promise<{ ok: boolean; pesan: string }>) {
+    setSibuk(true);
+    setUmpan(null);
+    const r = await f();
+    setUmpan({ ok: r.ok, teks: r.pesan });
+    setSibuk(false);
+  }
+
+  const pesan = umpan && <Info jenis={umpan.ok ? "info" : "peringatan"}>{umpan.teks}</Info>;
+
+  if (st.serverMati) {
+    return <Info jenis="peringatan">Server lokal tidak aktif, jadi koneksi Garmin tidak bisa dicek. Jalankan aplikasi dengan npm run dev.</Info>;
+  }
+
+  if (koneksi?.status === "terhubung" && !ganti) {
+    return (
+      <div className="hubungkan-garmin">
+        <div className="stack" style={{ gap: 4 }}>
+          <b>Garmin terhubung · {koneksi.namaGarmin}</b>
+          <span className="muted kecil">
+            {koneksi.email} · sejak {fmtWaktu(koneksi.terhubungAt)}
+            {koneksi.sinkronTerakhirAt && ` · data terakhir ditarik ${fmtWaktu(koneksi.sinkronTerakhirAt)}`}
+          </span>
+        </div>
+        <div className="row">
+          <button className="btn utama" disabled={sibuk} onClick={() => void jalan(() => tarikGarmin(id, hariIni, nama(id)))}>
+            {sibuk ? "Menarik…" : "Tarik data sekarang"}
+          </button>
+          <button className="btn" disabled={sibuk} onClick={() => (setGanti(true), setUmpan(null))}>
+            Ganti akun
+          </button>
+          <button
+            className="btn bahaya"
+            disabled={sibuk}
+            onClick={() => {
+              if (confirm("Putuskan akun Garmin? Sesi Garmin dihapus dari server dan data baru berhenti masuk."))
+                void jalan(async () => (await putusGarmin(id), { ok: true, pesan: "Akun Garmin diputus." }));
+            }}
+          >
+            Putuskan
+          </button>
+        </div>
+        {pesan}
+      </div>
+    );
+  }
 
   return (
-    <div className="hubungkan-garmin">
+    <div className="hubungkan-garmin form-key">
       <div className="stack" style={{ gap: 4 }}>
-        <b>Hubungkan jam Garmin</b>
+        <b>{koneksi?.status === "perlu_login_ulang" ? "Sesi Garmin Anda berakhir, masuk lagi" : ganti ? "Ganti akun Garmin" : "Hubungkan akun Garmin Connect"}</b>
         <span className="muted kecil">
-          {!integrasiAktif
-            ? "Tim belum mengaktifkan integrasi Garmin."
-            : !wearableBerlaku
-              ? "Persetujuan data wearable belum dicatat oleh Super admin. Sementara itu, beban latihan dicatat manual lewat RPE di tab Check-in."
-              : koneksi?.status === "diundang"
-              ? "Staf mengundang Anda menghubungkan akun Garmin agar langkah, tidur, detak jantung, dan stres terisi otomatis."
-              : "Langkah, tidur, detak jantung, stres, dan data lain akan terisi otomatis setiap pagi."}
+          Masukkan email dan password Garmin Connect Anda. Langkah, tidur, detak jantung, stres, Body Battery, dan aktivitas akan ditarik dari akun
+          itu.
         </span>
       </div>
-      {integrasiAktif && wearableBerlaku && (
-        <button className="btn utama" onClick={() => setOtorisasi(true)}>
-          Hubungkan akun Garmin
-        </button>
-      )}
-      <Pesan umpan={umpan} />
-      {otorisasi && (
-        <Jendela judul="Otorisasi Garmin Connect" tutup={() => setOtorisasi(false)}>
-          <div className="stack">
-            <h2>Izinkan akses Garmin Connect</h2>
-            <p className="ink-2">
-              Data Garmin (langkah, tidur, kalori, detak jantung, stres, Pulse Ox, Body Battery, komposisi tubuh, respirasi, dan tekanan darah)
-              akan masuk otomatis sesuai persetujuan dalam kontrak Anda.
-            </p>
-            <p className="muted kecil">
-              Di aplikasi sungguhan, Anda akan diarahkan ke halaman masuk Garmin Connect. Di prototipe ini langkah itu disimulasikan.
-            </p>
-            <div className="row">
-              <button
-                className="btn utama"
-                style={{ flex: "1 1 140px" }}
-                onClick={() => {
-                  setOtorisasi(false);
-                  jalankan(svc.hubungkanAkunGarmin(actor, { garminUserId: `garmin-${actor.athleteId}` }), "Akun Garmin terhubung.");
-                }}
-              >
-                Hubungkan (simulasi)
-              </button>
-              <button className="btn" style={{ flex: "1 1 140px" }} onClick={() => setOtorisasi(false)}>
-                Batal
-              </button>
-            </div>
-          </div>
-        </Jendela>
-      )}
+      <FormLoginGarmin
+        atletId={id}
+        nama={nama(id)}
+        emailAwal={koneksi?.email}
+        batal={ganti ? () => setGanti(false) : undefined}
+        selesai={(teks) => {
+          setGanti(false);
+          setUmpan({ ok: true, teks });
+        }}
+      />
+      {pesan}
     </div>
   );
 }

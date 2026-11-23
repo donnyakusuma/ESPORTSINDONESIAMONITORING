@@ -1,4 +1,4 @@
-import type { Actor, CommandResult, DataWearableInput, JenisKelamin, Membership } from "../../src/index.js";
+import type { Actor, CommandResult, JenisKelamin, Membership } from "../../src/index.js";
 import { MemoryNotificationPort, MemoryStorage, MonitoringService } from "../../src/index.js";
 import { tambahHari, tanggalDiZona } from "../../src/domain/tanggal.js";
 import type { Clock } from "../../src/ports/clock.js";
@@ -134,47 +134,6 @@ function buatId(nama: string, terpakai: Set<string>): string {
   for (let n = 2; terpakai.has(id); n++) id = `${kata[0]}${n}`;
   terpakai.add(id);
   return id;
-}
-
-// ───────────────────────── Simulasi sinkron Garmin ─────────────────────────
-
-function jamDariMenitMalam(menit: number): string {
-  const total = (Math.round(menit) + 18 * 60) % 1440;
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
-/**
- * Simulasi "Sinkron sekarang" di tab Integrasi Garmin: membuat ringkasan
- * Garmin hari ini untuk satu atlet, seolah dikirim webhook Garmin. Hanya
- * untuk mencoba alur prototipe; tombolnya diberi label simulasi.
- */
-export function simulasiSinkronGarmin(svc: MonitoringService, athleteId: string): CommandResult<unknown> {
-  const acak = (min: number, max: number) => min + Math.random() * (max - min);
-  const tidurMenit = Math.round(acak(360, 480));
-  const mulai = acak(300, 390);
-  const data: DataWearableInput = {
-    athleteId,
-    tanggal: hariIniTim(),
-    langkah: Math.round(acak(2800, 8000)),
-    menitIntensitas: Math.round(acak(0, 40)),
-    tidur: {
-      durasiMenit: tidurMenit,
-      skor: Math.round(acak(55, 90)),
-      mulai: jamDariMenitMalam(mulai),
-      bangun: jamDariMenitMalam(mulai + tidurMenit + 10),
-    },
-    kalori: Math.round(acak(1900, 2700)),
-    detakJantung: { istirahat: Math.round(acak(52, 68)), rataRata: Math.round(acak(70, 85)), maks: Math.round(acak(120, 160)) },
-    stres: Math.round(acak(20, 50)),
-    spo2: Math.round(acak(95, 99)),
-    bodyBattery: { tertinggi: Math.round(acak(55, 95)), terendah: Math.round(acak(5, 30)) },
-    komposisiTubuh: null,
-    respirasi: Math.round(acak(13, 16.5) * 10) / 10,
-    tekananDarah: null,
-    hrvRmssd: Math.round(acak(45, 85)),
-    durasiDudukMenit: Math.round(acak(380, 560)),
-  };
-  return svc.terimaDataWearable(data);
 }
 
 // ───────────────────────── Data awal ─────────────────────────
