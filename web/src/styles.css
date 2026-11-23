@@ -664,3 +664,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .wh-bb { position: relative; height: 12px; border-radius: 6px; background: rgba(255,255,255,0.08); margin: 6px 0 4px; }
 .wh-bb span { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: #2BB5A0; }
 .wh-bb-sumbu { display: flex; justify-content: space-between; font-size: 11px; color: #8a8387; }
+
+/* Istilah kamus harmonizer */
+abbr.istilah { text-decoration: underline dotted rgba(255,255,255,0.35); text-underline-offset: 3px; cursor: help; }
+.wh-bpr { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-radius: 12px; border-left: 4px solid; background: rgba(255,255,255,0.04); max-width: 420px; }
+.wh-bpr b { font-size: 16px; }
+.wh-bpr-arti { font-size: 12px; color: #a39ca0; }
+.wh-asal { font-size: 11px; color: #8a8387; }
+.wh-asal-inline { color: #8a8387; font-weight: 500; font-size: 11px; }
+.wh-vital-item b + b { margin-top: -2px; }
+.wh-vital-kaki { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.wh-istilah-sesi { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.wh-istilah-sesi li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: #cfc9cc; }
+.wh-istilah-sesi small { color: #8a8387; }
+.wh-peringatan { margin: 8px 0 0; padding-left: 18px; color: #a39ca0; font-size: 12px; display: grid; gap: 4px; }
+.kamus-tabel td { vertical-align: top; font-size: 13px; }
+.kamus-tabel td:first-child { font-family: ui-monospace, monospace; white-space: nowrap; }
+.kamus-level { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }

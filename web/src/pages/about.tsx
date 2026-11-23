@@ -1,3 +1,4 @@
+import { KAMUS, VERSI_KAMUS } from "../lib/harmonizer.mjs";
 import { AlamatSalin } from "./integrasi.js";
 
 /** Alamat publik (GitHub Pages, https) yang didaftarkan di WHOOP Developer Dashboard. */
@@ -11,7 +12,7 @@ export function HalamanAbout() {
       <div className="judul">
         <div>
           <h1>About</h1>
-          <p>Alamat publik aplikasi untuk pendaftaran di WHOOP Developer Dashboard.</p>
+          <p>Alamat publik untuk pendaftaran WHOOP, dan kamus istilah data WHOOP + Garmin untuk atlet esports.</p>
         </div>
       </div>
 
@@ -47,6 +48,65 @@ export function HalamanAbout() {
           </p>
         </div>
       </section>
+
+      <section className="stack">
+        <div className="setelan-ket">
+          <h2>3. Kamus Istilah (v{VERSI_KAMUS})</h2>
+          <p>
+            Satu kamus untuk data WHOOP dan Garmin. Setiap angka di Dashboard memakai nama, satuan, dan definisi dari sini. Metrik{" "}
+            <b>serupa</b> (rumus vendor berbeda) selalu ditampilkan per vendor dan tidak pernah dirata-rata lintas vendor.
+          </p>
+        </div>
+        {GRUP.map((g) => (
+          <div key={g.level} className="card flush">
+            <div className="card-head">
+              <h3>
+                {g.judul} <span className="kamus-level">{g.level}</span>
+              </h3>
+              <span className="muted kecil">{g.arti}</span>
+            </div>
+            <div className="table-wrap">
+              <table className="kamus-tabel">
+                <thead>
+                  <tr>
+                    <th>Kode</th>
+                    <th>Istilah</th>
+                    <th>Definisi</th>
+                    <th>WHOOP</th>
+                    <th>Garmin</th>
+                    <th>Kaveat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {KAMUS.filter((k) => k.level === g.level).map((k) => (
+                    <tr key={k.kode}>
+                      <td>{k.kode}</td>
+                      <td>
+                        <b>{k.nama}</b>
+                        <div className="muted kecil">
+                          {k.en} · {k.unit}
+                        </div>
+                      </td>
+                      <td>{k.definisi}</td>
+                      <td className="muted">{k.whoop}</td>
+                      <td className="muted">{k.garmin}</td>
+                      <td className="muted">{k.kaveat}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </section>
     </>
   );
 }
+
+const GRUP = [
+  { level: "setara", judul: "Metrik dasar bersama", arti: "Arti dan cara ukur sama; hanya nama/satuan vendor berbeda." },
+  { level: "serupa", judul: "Skor vendor", arti: "Tujuan sama, rumus berbeda. Tidak boleh digabung lintas vendor." },
+  { level: "satu_sisi", judul: "Hanya satu vendor", arti: "Ada di salah satu vendor saja." },
+  { level: "baru", judul: "Istilah esports (usulan)", arti: "Turunan khusus esports; belum tervalidasi." },
+  { level: "input", judul: "Masukan log", arti: "Dari log pelatih/atlet, bukan dari perangkat." },
+];

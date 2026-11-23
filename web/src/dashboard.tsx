@@ -1,8 +1,9 @@
-import { gabungHari, hariDariGarmin } from "./dataAtlet.js";
+import { useMemo } from "react";
+import { susunAtlet } from "./dataAtlet.js";
 import { CSV_GARMIN, TANGGAL_GARMIN } from "./data/garmin-health-stats.js";
 import { useGarminLive } from "./garminLive.js";
 import { PanelAtlet } from "./PanelAtlet.js";
-import { useWhoopHarian } from "./whoopApi.js";
+import { useWhoopRekaman } from "./whoopApi.js";
 
 type Baris = Record<string, string>;
 
@@ -22,10 +23,13 @@ function barisCsvAtlet(nama: string): Baris | undefined {
 export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | null; versi?: number }) {
   const { namaAtlet, idAtlet, versi = 0 } = props;
   const live = useGarminLive()[idAtlet ?? ""];
-  const wh = useWhoopHarian(idAtlet, versi);
+  const wh = useWhoopRekaman(idAtlet, versi);
 
-  const barisGarmin = live ? { data: live.data, tanggal: live.tanggal } : namaAtlet && barisCsvAtlet(namaAtlet) ? { data: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN } : null;
-  const hari = gabungHari(wh.hari, barisGarmin ? [hariDariGarmin(barisGarmin.data, barisGarmin.tanggal)] : []);
+  // Semua sumber diseragamkan lewat harmonizer (kamus, satuan, dan aturan tanggal yang sama).
+  const { hari, peringatan } = useMemo(() => {
+    const baris = live ? { baris: live.data, tanggal: live.tanggal } : namaAtlet && barisCsvAtlet(namaAtlet) ? { baris: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN } : null;
+    return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin: baris });
+  }, [idAtlet, namaAtlet, live, wh.rekaman]);
 
   return (
     <>
@@ -37,7 +41,7 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
       </div>
 
       {hari.length > 0 ? (
-        <PanelAtlet key={idAtlet ?? ""} hari={hari} />
+        <PanelAtlet key={idAtlet ?? ""} hari={hari} peringatan={peringatan} />
       ) : wh.memuat && idAtlet ? (
         <div className="card muted">Memuat data…</div>
       ) : (

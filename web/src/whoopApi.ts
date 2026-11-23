@@ -63,108 +63,31 @@ export function useWhoopAtlet(athleteId: string | null, versi = 0) {
   return hasil;
 }
 
-// ───────────────────────── Data harian (untuk tampilan ala aplikasi WHOOP) ─────────────────────────
+// ───────────────────────── Rekaman mentah (diseragamkan oleh harmonizer di dataAtlet.ts) ─────────────────────────
 
-import type { HariAtlet } from "./dataAtlet.js";
-export type HariWhoop = HariAtlet;
+export type RekamanWhoop = Record<string, unknown> & { type: string };
 
-type Rekaman = Record<string, any> & { type: string };
-const menit = (ms: unknown) => (typeof ms === "number" ? Math.round(ms / 60000) : 0);
-const angka = (v: unknown) => (typeof v === "number" ? v : null);
-const kkal = (kj: unknown) => (typeof kj === "number" ? Math.round(kj / 4.184) : null);
-/** Tanggal kalender WIB dari stempel waktu ISO. */
-export const tanggalWib = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 /**
- * Hari sebuah siklus WHOOP. Siklus mulai saat atlet tidur (mis. 23.00 tgl 22), tetapi aplikasi WHOOP
- * menampilkannya sebagai hari bangun (tgl 23); +12 jam dari awal siklus jatuh di hari bangun itu.
+ * Rekaman WHOOP mentah 42 hari terakhir: 7 hari untuk tampilan + 28 hari basis Bendera Perhatian Relatif.
+ * Diperbarui tiap 5 menit agar hasil sinkron otomatis server ikut tampil.
  */
-const hariSiklus = (iso: string) => tanggalWib(new Date(new Date(iso).getTime() + 12 * 3600_000).toISOString());
-
-import { hariKosong } from "./dataAtlet.js";
-
-export function susunHarian(rekaman: Rekaman[]): HariWhoop[] {
-  const siklus = rekaman.filter((r) => r.type === "cycle");
-  const perSiklus = new Map<number, HariWhoop>();
-  const hari = new Map<string, HariWhoop>();
-  const ambilHari = (tgl: string) => {
-    let h = hari.get(tgl);
-    if (!h) hari.set(tgl, (h = hariKosong(tgl, "Whoop")));
-    return h;
-  };
-  for (const c of siklus) {
-    const h = ambilHari(hariSiklus(c.start));
-    if (typeof c.step_count === "number") h.langkah = c.step_count;
-    perSiklus.set(c.id, h);
-    if (c.score_state === "SCORED" && c.score)
-      h.strain = { skor: c.score.strain, kkal: kkal(c.score.kilojoule), hrRata: angka(c.score.average_heart_rate), hrMaks: angka(c.score.max_heart_rate) };
-  }
-  for (const r of rekaman.filter((x) => x.type === "recovery" && x.score_state === "SCORED" && x.score)) {
-    const h = perSiklus.get(r.cycle_id) ?? ambilHari(hariSiklus(r.created_at));
-    h.recovery = {
-      skor: r.score.recovery_score,
-      hrv: angka(r.score.hrv_rmssd_milli),
-      rhr: angka(r.score.resting_heart_rate),
-      spo2: angka(r.score.spo2_percentage),
-      suhuKulit: angka(r.score.skin_temp_celsius),
-    };
-  }
-  for (const s of rekaman.filter((x) => x.type === "sleep" && !x.nap && x.score_state === "SCORED" && x.score)) {
-    const h = perSiklus.get(s.cycle_id) ?? ambilHari(hariSiklus(s.start));
-    const st = s.score.stage_summary ?? {};
-    const n = s.score.sleep_needed;
-    h.tidur = {
-      mulai: s.start,
-      selesai: s.end,
-      performa: angka(s.score.sleep_performance_percentage),
-      skor: null,
-      konsistensi: angka(s.score.sleep_consistency_percentage),
-      efisiensi: angka(s.score.sleep_efficiency_percentage),
-      respirasi: angka(s.score.respiratory_rate),
-      gangguan: angka(st.disturbance_count),
-      bangun: menit(st.total_awake_time_milli),
-      ringan: menit(st.total_light_sleep_time_milli),
-      dalam: menit(st.total_slow_wave_sleep_time_milli),
-      rem: menit(st.total_rem_sleep_time_milli),
-      butuh: n
-        ? menit((n.baseline_milli ?? 0) + (n.need_from_sleep_debt_milli ?? 0) + (n.need_from_recent_strain_milli ?? 0) + (n.need_from_recent_nap_milli ?? 0))
-        : null,
-    };
-  }
-  for (const w of rekaman.filter((x) => x.type === "workout")) {
-    const z = w.score?.zone_durations ?? {};
-    ambilHari(tanggalWib(w.start)).latihan.push({
-      olahraga: String(w.sport_name ?? "Aktivitas").replace(/[-_]/g, " "),
-      mulai: w.start,
-      selesai: w.end,
-      strain: angka(w.score?.strain),
-      hrRata: angka(w.score?.average_heart_rate),
-      hrMaks: angka(w.score?.max_heart_rate),
-      kkal: kkal(w.score?.kilojoule),
-      zona: ["zero", "one", "two", "three", "four", "five"].map((k) => menit(z[`zone_${k}_milli`])),
-    });
-  }
-  return [...hari.values()].sort((a, b) => a.tanggal.localeCompare(b.tanggal)).slice(-7);
-}
-
-/** Rekaman 8 hari terakhir dari server lalu disusun per hari; diperbarui tiap 5 menit. */
-export function useWhoopHarian(athleteId: string | null, versi = 0) {
-  const [hasil, setHasil] = useState<{ status: StatusWhoop | null; hari: HariWhoop[]; mati: boolean; memuat: boolean }>({
+export function useWhoopRekaman(athleteId: string | null, versi = 0) {
+  const [hasil, setHasil] = useState<{ status: StatusWhoop | null; rekaman: RekamanWhoop[]; memuat: boolean }>({
     status: null,
-    hari: [],
-    mati: false,
+    rekaman: [],
     memuat: true,
   });
   useEffect(() => {
     if (!athleteId) return;
     let batal = false;
-    setHasil((h) => ({ ...h, memuat: true }));
+    setHasil({ status: null, rekaman: [], memuat: true });
     const muat = async () => {
       try {
         const status = await whoop.status(athleteId);
-        const rek = status.connected ? await ambilJson<Rekaman[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=8&limit=200`) : [];
-        if (!batal) setHasil({ status, hari: susunHarian(rek), mati: false, memuat: false });
+        const rekaman = status.connected ? await ambilJson<RekamanWhoop[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=42&limit=1000`) : [];
+        if (!batal) setHasil({ status, rekaman, memuat: false });
       } catch {
-        if (!batal) setHasil({ status: null, hari: [], mati: true, memuat: false });
+        if (!batal) setHasil({ status: null, rekaman: [], memuat: false });
       }
     };
     void muat();
@@ -176,4 +99,3 @@ export function useWhoopHarian(athleteId: string | null, versi = 0) {
   }, [athleteId, versi]);
   return hasil;
 }
-

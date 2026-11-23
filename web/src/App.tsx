@@ -207,15 +207,6 @@ function Aplikasi({
         </aside>
 
         <div className="main">
-          {contoh && (
-            <div className="spanduk-contoh" role="note">
-              <b>Data contoh.</b> Angka, catatan, dan laporan di aplikasi ini dibuat acak untuk memberi gambaran, bukan data asli atlet atau
-              pelatih.{" "}
-              <button className="link" onClick={() => gantiModeContoh(false)}>
-                Matikan data contoh
-              </button>
-            </div>
-          )}
           <header className="top">
             <span className="tanggal">{fmtTanggal(ctx.hariIni)}</span>
             <div className="pilih-atlet">

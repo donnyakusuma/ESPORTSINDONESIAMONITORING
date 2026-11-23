@@ -1,150 +1,182 @@
 /**
- * Satu hari data atlet dari semua perangkat (Whoop, Garmin), digabung jadi satu tampilan.
- * Bila satu metrik ada di kedua sumber, Whoop dipakai; Garmin mengisi yang kosong.
+ * Data atlet dari semua perangkat, diseragamkan lewat harmonizer (lib/harmonizer.mjs):
+ * satu kamus istilah, satu satuan, satu aturan tanggal (tanggal bangun lokal).
+ *
+ * Harmonizer menghasilkan satu catatan per atlet × tanggal × vendor dan TIDAK menggabung vendor.
+ * Untuk tampilan, berkas ini menyusun catatan itu per tanggal dengan aturan dari kamus:
+ *   - level "setara" / "satu_sisi" / "baru": satu nilai; WHOOP dipakai bila ada, lalu Garmin, dan sumbernya ditampilkan.
+ *   - level "serupa" (rumus vendor berbeda): nilai tiap vendor ditampilkan terpisah, tidak pernah dicampur.
  */
-export type Sumber = "Whoop" | "Garmin";
+import { harmonisasi, KAMUS, type Aktivitas, type Catatan, type EntriKamus, type Field } from "./lib/harmonizer.mjs";
 
-export interface HariAtlet {
-  tanggal: string; // YYYY-MM-DD (WIB)
-  sumber: Sumber[];
-  recovery: { skor: number; hrv: number | null; rhr: number | null; spo2: number | null; suhuKulit: number | null } | null;
-  /** Metrik harian yang tidak bergantung pada skor recovery (dari Garmin, atau Whoop bila ada). */
-  vital: { hrv: number | null; rhr: number | null };
-  tidur: {
-    mulai: string | null;
-    selesai: string | null;
-    /** Sleep performance WHOOP (%). */
-    performa: number | null;
-    /** Sleep Score Garmin (0–100). */
-    skor: number | null;
-    konsistensi: number | null;
-    efisiensi: number | null;
-    respirasi: number | null;
-    gangguan: number | null;
-    /** Durasi dalam menit. */
-    bangun: number;
-    ringan: number;
-    dalam: number;
-    rem: number;
-    butuh: number | null;
-  } | null;
-  strain: { skor: number; kkal: number | null; hrRata: number | null; hrMaks: number | null } | null;
-  kkal: number | null;
-  langkah: number | null;
-  /** Body Battery Garmin. */
-  energi: { maks: number | null; min: number | null; isi: number | null; pakai: number | null } | null;
-  /** Stres Garmin: tingkat rata-rata/puncak (0–100) dan durasi per tingkat (menit). */
-  stres: { rata: number | null; maks: number | null; istirahat: number | null; rendah: number | null; sedang: number | null; tinggi: number | null } | null;
-  latihan: {
-    olahraga: string;
-    mulai: string;
-    selesai: string;
-    strain: number | null;
-    hrRata: number | null;
-    hrMaks: number | null;
-    kkal: number | null;
-    /** Menit di zona detak jantung 0–5. */
-    zona: number[];
-  }[];
+export type Vendor = "whoop" | "garmin";
+export const NAMA_VENDOR: Record<Vendor, string> = { whoop: "WHOOP", garmin: "Garmin" };
+export const KAMUS_PER_KODE = new Map<string, EntriKamus>(KAMUS.map((k) => [k.kode, k]));
+
+/** Rincian Garmin yang tidak ada di kamus (ditampilkan sebagai rincian vendor, bukan metrik seragam). */
+export interface RinciGarmin {
+  stres: { istirahat: number | null; rendah: number | null; sedang: number | null; tinggi: number | null; puncak: number | null } | null;
+  bb: { min: number | null; isi: number | null; pakai: number | null } | null;
 }
 
-export function hariKosong(tanggal: string, sumber: Sumber): HariAtlet {
-  return {
-    tanggal,
-    sumber: [sumber],
-    recovery: null,
-    vital: { hrv: null, rhr: null },
-    tidur: null,
-    strain: null,
-    kkal: null,
-    langkah: null,
-    energi: null,
-    stres: null,
-    latihan: [],
-  };
+export interface HariTampil {
+  tanggal: string;
+  catatan: Partial<Record<Vendor, Catatan>>;
+  aktivitas: Aktivitas[];
+  rinciGarmin: RinciGarmin | null;
 }
 
-// ───────────────────────── Garmin (baris ekspor / tarikan Garmin Connect) ─────────────────────────
+export interface Nilai {
+  nilai: number;
+  vendor: Vendor;
+  field: Field;
+}
+
+const URUTAN: Vendor[] = ["whoop", "garmin"];
+
+/** Nilai angka satu metrik: WHOOP dulu, lalu Garmin. Untuk metrik "serupa" pakai `nilaiVendor`. */
+export function nilai(h: HariTampil | undefined, kode: string): Nilai | null {
+  if (!h) return null;
+  for (const v of URUTAN) {
+    const f = h.catatan[v]?.metrik[kode];
+    if (f && typeof f.nilai === "number") return { nilai: f.nilai, vendor: v, field: f };
+  }
+  return null;
+}
+
+/** Nilai metrik dari satu vendor saja. */
+export function nilaiVendor(h: HariTampil | undefined, kode: string, v: Vendor): Nilai | null {
+  const f = h?.catatan[v]?.metrik[kode];
+  return f && typeof f.nilai === "number" ? { nilai: f.nilai, vendor: v, field: f } : null;
+}
+
+/** Nilai kategori (mis. BPR) dari vendor pertama yang punya. */
+export function kategori(h: HariTampil | undefined, kode: string): { nilai: string; vendor: Vendor; field: Field } | null {
+  if (!h) return null;
+  for (const v of URUTAN) {
+    const f = h.catatan[v]?.metrik[kode];
+    if (f && typeof f.nilai === "string") return { nilai: f.nilai, vendor: v, field: f };
+  }
+  return null;
+}
+
+export const adaData = (h: HariTampil) => Object.keys(h.catatan).length > 0 || h.aktivitas.length > 0;
+
+// ───────────────────────── Garmin: baris ekspor / tarikan → bentuk summary Garmin Health API ─────────────────────────
 
 type Baris = Record<string, string | undefined>;
 const n = (v: string | undefined) => (v ? Number(v) : null);
-const m = (v: string | undefined) => {
+const detik = (v: string | undefined) => {
   const x = v?.match(/^(\d+):(\d{2})$/);
-  return x ? Number(x[1]) * 60 + Number(x[2]) : null;
+  return x ? (Number(x[1]) * 60 + Number(x[2])) * 60 : null;
+};
+const menit = (v: string | undefined) => {
+  const d = detik(v);
+  return d === null ? null : d / 60;
 };
 
-export function hariDariGarmin(b: Baris, tanggal: string): HariAtlet {
-  const h = hariKosong(tanggal, "Garmin");
-  h.vital = { hrv: n(b["HRV Last Night Avg. (ms)"]), rhr: n(b["Resting HR (bpm)"]) };
-  h.kkal = n(b["Total Calories (kcal)"]);
-  const tahap = [m(b["Avg. Sleep Awake Dur. (h:min)"]), m(b["Avg. Light Sleep (h:min)"]), m(b["Avg. Deep Sleep (h:min)"]), m(b["Avg. REM Sleep (h:min)"])];
-  const skorTidur = n(b["Sleep Score"]);
-  if (skorTidur !== null || tahap.some((x) => x !== null)) {
-    h.tidur = {
-      mulai: null,
-      selesai: null,
-      performa: null,
-      skor: skorTidur,
-      konsistensi: null,
-      efisiensi: null,
-      respirasi: null,
-      gangguan: null,
-      bangun: tahap[0] ?? 0,
-      ringan: tahap[1] ?? 0,
-      dalam: tahap[2] ?? 0,
-      rem: tahap[3] ?? 0,
-      butuh: null,
-    };
-  }
-  const energi = { maks: n(b["Body Battery (Max)"]), min: n(b["Body Battery (Min)"]), isi: n(b["Body Battery (Charge)"]), pakai: n(b["Body Battery (Drain)"]) };
-  if (Object.values(energi).some((x) => x !== null)) h.energi = energi;
-  const stres = {
-    rata: n(b["Avg. Daily Stress Level"]),
-    maks: n(b["Max. Stress Level"]),
-    istirahat: m(b["Rest Stress Dur. (h:min)"]),
-    rendah: m(b["Low Stress Dur. (h:min)"]),
-    sedang: m(b["Medium Stress Dur. (h:min)"]),
-    tinggi: m(b["High Stress Dur. (h:min)"]),
+/**
+ * Ekspor "Health Stats" Garmin Connect memakai nama kolom tampilan, bukan nama field API.
+ * Fungsi ini menerjemahkannya ke bentuk yang dikenali harmonizer (ALIAS Garmin).
+ */
+function garminKeSummary(b: Baris, tanggal: string) {
+  const dalam = detik(b["Avg. Deep Sleep (h:min)"]);
+  const ringan = detik(b["Avg. Light Sleep (h:min)"]);
+  const rem = detik(b["Avg. REM Sleep (h:min)"]);
+  const jaga = detik(b["Avg. Sleep Awake Dur. (h:min)"]);
+  const skor = n(b["Sleep Score"]);
+  const adaTidur = [dalam, ringan, rem].every((x) => x !== null) || skor !== null;
+  const bbMaks = n(b["Body Battery (Max)"]);
+  const bbMin = n(b["Body Battery (Min)"]);
+  return {
+    sleeps: adaTidur
+      ? [
+          {
+            calendarDate: tanggal,
+            deepSleepDurationInSeconds: dalam,
+            lightSleepDurationInSeconds: ringan,
+            remSleepInSeconds: rem,
+            awakeDurationInSeconds: jaga,
+            durationInSeconds: [dalam, ringan, rem, jaga].every((x) => x !== null) ? dalam! + ringan! + rem! + jaga! : null,
+            overallSleepScore: skor === null ? null : { value: skor },
+          },
+        ]
+      : [],
+    hrv: n(b["HRV Last Night Avg. (ms)"]) !== null ? [{ calendarDate: tanggal, lastNightAvg: n(b["HRV Last Night Avg. (ms)"]) }] : [],
+    dailies: [{ calendarDate: tanggal, restingHeartRateInBeatsPerMinute: n(b["Resting HR (bpm)"]), averageStressLevel: n(b["Avg. Daily Stress Level"]) }],
+    stress: bbMaks !== null || bbMin !== null ? [{ calendarDate: tanggal, timeOffsetBodyBatteryValues: [bbMaks, bbMin].filter((x) => x !== null) }] : [],
   };
-  if (Object.values(stres).some((x) => x !== null)) h.stres = stres;
-  return h;
 }
 
-/** Gabungkan hari-hari dari beberapa sumber; Whoop diutamakan, Garmin mengisi yang kosong. */
-export function gabungHari(whoop: HariAtlet[], garmin: HariAtlet[]): HariAtlet[] {
-  const peta = new Map(whoop.map((h) => [h.tanggal, { ...h, vital: { ...h.vital } }]));
-  for (const g of garmin) {
-    const w = peta.get(g.tanggal);
-    if (!w) {
-      peta.set(g.tanggal, g);
-      continue;
+function rinciGarmin(b: Baris): RinciGarmin {
+  const stres = {
+    istirahat: menit(b["Rest Stress Dur. (h:min)"]),
+    rendah: menit(b["Low Stress Dur. (h:min)"]),
+    sedang: menit(b["Medium Stress Dur. (h:min)"]),
+    tinggi: menit(b["High Stress Dur. (h:min)"]),
+    puncak: n(b["Max. Stress Level"]),
+  };
+  const bb = { min: n(b["Body Battery (Min)"]), isi: n(b["Body Battery (Charge)"]), pakai: n(b["Body Battery (Drain)"]) };
+  return {
+    stres: Object.values(stres).some((x) => x !== null) ? stres : null,
+    bb: Object.values(bb).some((x) => x !== null) ? bb : null,
+  };
+}
+
+// ───────────────────────── Susun ─────────────────────────
+
+type Rekaman = Record<string, unknown> & { type: string };
+
+export function susunAtlet(masukan: {
+  athleteId: string;
+  whoop: Rekaman[];
+  garmin: { baris: Baris; tanggal: string } | null;
+}): { hari: HariTampil[]; peringatan: string[] } {
+  const per = (t: string) => masukan.whoop.filter((r) => r.type === t);
+  const adaWhoop = masukan.whoop.length > 0;
+  const g = masukan.garmin;
+  if (!adaWhoop && !g) return { hari: [], peringatan: [] };
+
+  const hasil = harmonisasi({
+    athlete_id: masukan.athleteId,
+    whoop: adaWhoop ? { sleeps: per("sleep"), recoveries: per("recovery"), cycles: per("cycle"), workouts: per("workout") } : null,
+    garmin: g ? garminKeSummary(g.baris, g.tanggal) : null,
+  });
+
+  // Energi Total Harian Garmin: kamus meminta active + BMR. Ekspor Health Stats hanya punya "Total Calories"
+  // (sudah termasuk BMR menurut Garmin Connect), jadi diisi dari sana dengan catatan asalnya.
+  if (g) {
+    const tot = n(g.baris["Total Calories (kcal)"]);
+    const c = hasil.catatan.find((x) => x.sumber === "garmin" && x.tanggal === g.tanggal);
+    if (c && tot !== null && (c.metrik.EKT?.nilai ?? null) === null) {
+      c.metrik.EKT = { nilai: tot, unit: "kkal", sumber: "garmin", kualitas: "asli", catatan: "Total Calories dari ekspor Garmin Connect" };
     }
-    w.sumber = [...new Set([...w.sumber, ...g.sumber])];
-    w.vital.hrv ??= g.vital.hrv;
-    w.vital.rhr ??= g.vital.rhr;
-    w.kkal ??= g.kkal;
-    w.langkah ??= g.langkah;
-    w.tidur ??= g.tidur;
-    if (w.tidur && g.tidur) w.tidur = { ...w.tidur, skor: w.tidur.skor ?? g.tidur.skor };
-    w.energi ??= g.energi;
-    w.stres ??= g.stres;
   }
-  // Recovery WHOOP juga mengisi metrik vital harian.
-  for (const h of peta.values()) {
-    if (h.recovery) {
-      h.vital.hrv = h.recovery.hrv ?? h.vital.hrv;
-      h.vital.rhr = h.recovery.rhr ?? h.vital.rhr;
-    }
-    h.kkal = h.strain?.kkal ?? h.kkal;
+
+  const peta = new Map<string, HariTampil>();
+  const ambil = (t: string) => {
+    let h = peta.get(t);
+    if (!h) peta.set(t, (h = { tanggal: t, catatan: {}, aktivitas: [], rinciGarmin: null }));
+    return h;
+  };
+  for (const c of hasil.catatan) {
+    const h = ambil(c.tanggal);
+    // Catatan yang hanya berisi aktivitas atau bendera "data_kurang" tidak dihitung sebagai data metrik.
+    const adaMetrik = Object.entries(c.metrik).some(([k, f]) => f.nilai !== null && !(k === "BPR" && f.nilai === "data_kurang"));
+    if (adaMetrik) h.catatan[c.sumber] = c;
+    h.aktivitas.push(...c.aktivitas);
   }
-  // 7 hari kalender berturut-turut sampai hari data terakhir; hari tanpa data tetap tampil (kosong).
-  const tanggal = [...peta.keys()].sort();
-  const akhir = tanggal[tanggal.length - 1];
-  if (!akhir) return [];
-  return Array.from({ length: 7 }, (_, k) => {
+  if (g) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
+
+  // 7 hari kalender berturut-turut sampai hari data terakhir; hari kosong tetap tampil.
+  const berdata = [...peta.values()].filter(adaData).map((h) => h.tanggal).sort();
+  const akhir = berdata[berdata.length - 1];
+  if (!akhir) return { hari: [], peringatan: hasil.peringatan };
+  const hari = Array.from({ length: 7 }, (_, k) => {
     const d = new Date(`${akhir}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() - (6 - k));
     const t = d.toISOString().slice(0, 10);
-    return peta.get(t) ?? { ...hariKosong(t, "Whoop"), sumber: [] };
+    return peta.get(t) ?? { tanggal: t, catatan: {}, aktivitas: [], rinciGarmin: null };
   });
+  return { hari, peringatan: hasil.peringatan };
 }
