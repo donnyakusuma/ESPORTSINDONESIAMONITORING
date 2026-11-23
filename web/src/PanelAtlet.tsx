@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { adaData, kategori, KAMUS_PER_KODE, nilai, pertama, type HariTampil, type HasilSusun } from "./dataAtlet.js";
-import { PARAM_IND } from "./lib/indeks-esports.mjs";
+import { PARAM_HARMONI, PARAM_IND } from "./lib/parameterApp.js";
 
 /**
  * Tampilan atlet bergaya aplikasi WHOOP. Bentuknya SELALU sama, dari perangkat mana pun datanya:
@@ -48,7 +48,7 @@ const BPR_INFO: Record<string, { warna: string; label: string; ikon: string; art
   hijau: { warna: WARNA.hijau, label: "Hijau", ikon: "▲", arti: "Tidak ada metrik yang menyimpang dari basis atlet" },
   kuning: { warna: WARNA.kuning, label: "Kuning", ikon: "●", arti: "1 metrik menyimpang ≥1 SD ke arah buruk" },
   merah: { warna: WARNA.merah, label: "Merah", ikon: "▼", arti: "≥2 metrik menyimpang ≥1 SD ke arah buruk" },
-  data_kurang: { warna: WARNA.netral, label: "Data kurang", ikon: "○", arti: "Butuh minimal 14 hari basis dari 28 hari terakhir" },
+  data_kurang: { warna: WARNA.netral, label: "Data kurang", ikon: "○", arti: `Butuh minimal ${PARAM_HARMONI.MIN_BASIS} hari basis dari ${PARAM_HARMONI.JENDELA_BASIS} hari terakhir` },
 };
 /** Komponen IKB: nama tampilan dan arti arah (s = +1: nilai naik itu baik). */
 const KOMPONEN_IKB: Record<string, string> = {
@@ -744,7 +744,7 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
                 </span>
               ) : (
                 <span className="wh-delta">
-                  <Istilah kode="DTTT">deviasi: butuh ≥7 malam</Istilah>
+                  <Istilah kode="DTTT">deviasi: butuh ≥{PARAM_HARMONI.TTT_MIN} malam</Istilah>
                 </span>
               )}
             </span>

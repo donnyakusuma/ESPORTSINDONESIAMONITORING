@@ -9,6 +9,7 @@
  */
 import { harmonisasi, KAMUS, type Aktivitas, type Catatan, type EntriKamus, type Field } from "./lib/harmonizer.mjs";
 import { hitungIndeks, type HasilIbms, type HasilIbms7, type HasilIkb } from "./lib/indeks-esports.mjs";
+import { PARAM_HARMONI, PARAM_IND } from "./lib/parameterApp.js";
 
 export type { HasilIbms, HasilIbms7, HasilIkb };
 
@@ -178,7 +179,7 @@ export function susunAtlet(masukan: {
     athlete_id: masukan.athleteId,
     whoop: adaWhoop ? { sleeps: per("sleep"), recoveries: per("recovery"), cycles: per("cycle"), workouts: per("workout") } : null,
     garmin,
-  });
+  }, PARAM_HARMONI);
 
   // Energi Total Harian Garmin: kamus meminta active + BMR. Ekspor Health Stats hanya punya "Total Calories"
   // (sudah termasuk BMR menurut Garmin Connect), jadi diisi dari sana dengan catatan asalnya.
@@ -190,7 +191,7 @@ export function susunAtlet(masukan: {
     }
   }
 
-  const indeks = hitungIndeks(hasil);
+  const indeks = hitungIndeks(hasil, PARAM_IND);
   const peta = new Map<string, HariTampil>();
   const ambil = (t: string) => {
     let h = peta.get(t);

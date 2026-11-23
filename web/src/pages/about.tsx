@@ -1,5 +1,6 @@
 import { KAMUS, VERSI_KAMUS } from "../lib/harmonizer.mjs";
-import { PARAM_IND, VERSI_INDEKS } from "../lib/indeks-esports.mjs";
+import { VERSI_INDEKS } from "../lib/indeks-esports.mjs";
+import { PARAM_IND } from "../lib/parameterApp.js";
 import { AlamatSalin } from "./integrasi.js";
 
 /** Alamat publik (GitHub Pages, https) yang didaftarkan di WHOOP Developer Dashboard. */
