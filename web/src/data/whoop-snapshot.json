@@ -1,6 +1,6 @@
 {
  "atletId": "donny.ardy",
- "diambil": "2026-11-23T03:34:28Z",
+ "diambil": "2026-11-23T03:36:40Z",
  "rekaman": [
   {
    "type": "recovery",
@@ -29,12 +29,12 @@
    "timezone_offset": "+07:00",
    "score_state": "SCORED",
    "score": {
-    "strain": 4.0738883,
-    "kilojoule": 3749.462,
-    "average_heart_rate": 71,
+    "strain": 4.0744886,
+    "kilojoule": 4014.3428,
+    "average_heart_rate": 72,
     "max_heart_rate": 124
    },
-   "step_count": 935
+   "step_count": 1028
   },
   {
    "type": "sleep",
