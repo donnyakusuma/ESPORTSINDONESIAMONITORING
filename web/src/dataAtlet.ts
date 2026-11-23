@@ -8,6 +8,9 @@
  *   - level "serupa" (rumus vendor berbeda): nilai tiap vendor ditampilkan terpisah, tidak pernah dicampur.
  */
 import { harmonisasi, KAMUS, type Aktivitas, type Catatan, type EntriKamus, type Field } from "./lib/harmonizer.mjs";
+import { hitungIndeks, type HasilIbms, type HasilIbms7, type HasilIkb } from "./lib/indeks-esports.mjs";
+
+export type { HasilIbms, HasilIbms7, HasilIkb };
 
 export type Vendor = "whoop" | "garmin";
 export const NAMA_VENDOR: Record<Vendor, string> = { whoop: "WHOOP", garmin: "Garmin" };
@@ -22,6 +25,8 @@ export interface RinciGarmin {
 export interface HariTampil {
   tanggal: string;
   catatan: Partial<Record<Vendor, Catatan>>;
+  /** Indeks Kesiapan Bermain hari itu (yang berstatus "ok" didahulukan; sumber perangkat tidak ditampilkan). */
+  ikb: HasilIkb | null;
   aktivitas: Aktivitas[];
   rinciGarmin: RinciGarmin | null;
 }
@@ -40,6 +45,15 @@ export function nilai(h: HariTampil | undefined, kode: string): Nilai | null {
   for (const v of URUTAN) {
     const f = h.catatan[v]?.metrik[kode];
     if (f && typeof f.nilai === "number") return { nilai: f.nilai, vendor: v, field: f };
+  }
+  return null;
+}
+
+/** Nilai pertama yang tersedia dari beberapa kode (mis. SPV lalu BB), tanpa menyebut sumbernya. */
+export function pertama(h: HariTampil | undefined, kode: string[]): { kode: string; nilai: number; field: Field } | null {
+  for (const k of kode) {
+    const n = nilai(h, k);
+    if (n) return { kode: k, nilai: n.nilai, field: n.field };
   }
   return null;
 }
@@ -127,15 +141,22 @@ function rinciGarmin(b: Baris): RinciGarmin {
 
 type Rekaman = Record<string, unknown> & { type: string };
 
+export interface HasilSusun {
+  hari: HariTampil[];
+  ibms: HasilIbms[];
+  ibms7: HasilIbms7[];
+  peringatan: string[];
+}
+
 export function susunAtlet(masukan: {
   athleteId: string;
   whoop: Rekaman[];
   garmin: { baris: Baris; tanggal: string } | null;
-}): { hari: HariTampil[]; peringatan: string[] } {
+}): HasilSusun {
   const per = (t: string) => masukan.whoop.filter((r) => r.type === t);
   const adaWhoop = masukan.whoop.length > 0;
   const g = masukan.garmin;
-  if (!adaWhoop && !g) return { hari: [], peringatan: [] };
+  if (!adaWhoop && !g) return { hari: [], ibms: [], ibms7: [], peringatan: [] };
 
   const hasil = harmonisasi({
     athlete_id: masukan.athleteId,
@@ -153,10 +174,11 @@ export function susunAtlet(masukan: {
     }
   }
 
+  const indeks = hitungIndeks(hasil);
   const peta = new Map<string, HariTampil>();
   const ambil = (t: string) => {
     let h = peta.get(t);
-    if (!h) peta.set(t, (h = { tanggal: t, catatan: {}, aktivitas: [], rinciGarmin: null }));
+    if (!h) peta.set(t, (h = { tanggal: t, catatan: {}, ikb: null, aktivitas: [], rinciGarmin: null }));
     return h;
   };
   for (const c of hasil.catatan) {
@@ -167,16 +189,20 @@ export function susunAtlet(masukan: {
     h.aktivitas.push(...c.aktivitas);
   }
   if (g) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
+  for (const k of indeks.ikb) {
+    const h = peta.get(k.tanggal);
+    if (h && (!h.ikb || (h.ikb.status !== "ok" && k.status === "ok"))) h.ikb = k;
+  }
 
   // 7 hari kalender berturut-turut sampai hari data terakhir; hari kosong tetap tampil.
   const berdata = [...peta.values()].filter(adaData).map((h) => h.tanggal).sort();
   const akhir = berdata[berdata.length - 1];
-  if (!akhir) return { hari: [], peringatan: hasil.peringatan };
+  if (!akhir) return { hari: [], ibms: [], ibms7: [], peringatan: hasil.peringatan };
   const hari = Array.from({ length: 7 }, (_, k) => {
     const d = new Date(`${akhir}T12:00:00Z`);
     d.setUTCDate(d.getUTCDate() - (6 - k));
     const t = d.toISOString().slice(0, 10);
-    return peta.get(t) ?? { tanggal: t, catatan: {}, aktivitas: [], rinciGarmin: null };
+    return peta.get(t) ?? { tanggal: t, catatan: {}, ikb: null, aktivitas: [], rinciGarmin: null };
   });
-  return { hari, peringatan: hasil.peringatan };
+  return { hari, ibms: indeks.ibms, ibms7: indeks.ibms7, peringatan: hasil.peringatan };
 }

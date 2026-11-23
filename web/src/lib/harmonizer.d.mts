@@ -53,6 +53,8 @@ export interface HasilHarmonisasi {
   versi: { kamus: string; pemeta: string; param: Record<string, number> };
   catatan: Catatan[];
   sesi: unknown[];
+  reaksi: unknown[];
+  benchmark_reaksi: Record<string, unknown>;
   peringatan: string[];
 }
 
@@ -62,6 +64,7 @@ export function harmonisasi(
     whoop?: { sleeps?: unknown[]; recoveries?: unknown[]; cycles?: unknown[]; workouts?: unknown[] } | null;
     garmin?: { sleeps?: unknown[]; hrv?: unknown[]; dailies?: unknown[]; stress?: unknown[]; activities?: unknown[] } | null;
     sesi?: unknown[];
+    reaksi?: unknown[];
   },
   param?: Record<string, number>,
 ): HasilHarmonisasi;

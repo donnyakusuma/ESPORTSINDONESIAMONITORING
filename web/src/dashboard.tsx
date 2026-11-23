@@ -26,7 +26,7 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
   const wh = useWhoopRekaman(idAtlet, versi);
 
   // Semua sumber diseragamkan lewat harmonizer (kamus, satuan, dan aturan tanggal yang sama).
-  const { hari, peringatan } = useMemo(() => {
+  const hasil = useMemo(() => {
     const baris = live ? { baris: live.data, tanggal: live.tanggal } : namaAtlet && barisCsvAtlet(namaAtlet) ? { baris: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN } : null;
     return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin: baris });
   }, [idAtlet, namaAtlet, live, wh.rekaman]);
@@ -40,8 +40,8 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
         </div>
       </div>
 
-      {hari.length > 0 ? (
-        <PanelAtlet key={idAtlet ?? ""} hari={hari} peringatan={peringatan} />
+      {hasil.hari.length > 0 ? (
+        <PanelAtlet key={idAtlet ?? ""} hasil={hasil} />
       ) : wh.memuat && idAtlet ? (
         <div className="card muted">Memuat data…</div>
       ) : (

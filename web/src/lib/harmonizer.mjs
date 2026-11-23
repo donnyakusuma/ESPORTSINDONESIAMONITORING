@@ -1,9 +1,11 @@
 // ============================================================================
-// harmonizer.mjs: penyeragaman data WHOOP + Garmin untuk atlet esports (1 file, tanpa dependensi)
+// harmonizer.mjs v0.2: penyeragaman data WHOOP + Garmin + tes reaksi untuk atlet esports (1 file, tanpa dependensi)
 // Node >= 20.  Jalankan:  node harmonizer.mjs --demo     (contoh data sintetis)
 //                         node harmonizer.mjs --kamus    (cetak kamus istilah)
 // Pakai di kode:  import { harmonisasi } from './harmonizer.mjs';
+// Masukan baru: reaksi = [{ id?, waktu: ISO, rata_ms, n_percobaan?, perangkat? }] -> keluaran reaksi + benchmark_reaksi per atlet.
 // Nama field Garmin bertanda ASUMSI (lihat ALIAS) harus dicocokkan dengan payload nyata.
+// Indeks gabungan (IKB, IBMS) ada di file terpisah: indeks-esports.mjs
 // ============================================================================
 // Kamus istilah: satu-satunya tempat nama, satuan, dan definisi operasional didefinisikan.
 // Pemeta (mappers) hanya boleh mengeluarkan kode yang ada di sini (diperiksa oleh field() dan oleh tes).
@@ -15,7 +17,7 @@
 //   baru       = istilah turunan khusus esports (usulan; belum tervalidasi)
 //   input      = data masukan dari log pelatih/atlet, bukan dari perangkat
 
-const VERSI_KAMUS = '0.1.0';
+const VERSI_KAMUS = '0.2.0';
 
 const KAMUS = [
   // ---------- A. Metrik dasar bersama ----------
@@ -119,6 +121,10 @@ const KAMUS = [
     whoop: 'log sesi', garmin: 'log sesi',
     definisi: 'Penilaian diri kelelahan mental setelah sesi pada skala 1-7 (skala yang dipakai Andre 2020).',
     kaveat: 'Subjektif; satu butir.' },
+  { kode: 'WRK', nama: 'Waktu Reaksi Pagi', en: 'Morning reaction time', unit: 'ms', level: 'input',
+    whoop: 'tes reaksi (bukan dari perangkat)', garmin: 'tes reaksi (bukan dari perangkat)',
+    definisi: 'Rata-rata waktu reaksi sederhana dari satu tes pagi hari (jam dan perangkat tes sama tiap hari). Dipakai sebagai benchmark per atlet dan sebagai pembanding untuk menguji IKB.',
+    kaveat: 'Dipengaruhi motivasi, perangkat tes, dan efek belajar; beberapa tes pertama dipakai sebagai pembiasaan dan tidak masuk benchmark. Waktu reaksi sederhana bukan ukuran seluruh kognisi bermain.' },
   { kode: 'BPR', nama: 'Bendera Perhatian Relatif', en: 'Relative attention flag', unit: 'kategori', tipe: 'kategori', level: 'baru',
     whoop: 'lnHRV, RHR, DTT terhadap basis diri sendiri', garmin: 'idem',
     definisi: 'hijau/kuning/merah dari jumlah metrik yang menyimpang >= 1 SD ke arah buruk dari basis 28 hari atlet itu sendiri. Pemicu percakapan pelatih-atlet, bukan keputusan.',
@@ -509,6 +515,11 @@ const PARAM = Object.freeze({
   TTT_JENDELA: 14,
   JLT_MAKS_JAM: 24,
   OVERLAP_MIN: 0.5, // bagian sesi log yang harus tumpang tindih dengan aktivitas vendor
+  REAKSI_MIN_MS: 100, // di bawah ini dianggap antisipasi/kesalahan input
+  REAKSI_MAKS_MS: 1000, // di atas ini dianggap kesalahan input atau tes tidak valid
+  REAKSI_PEMBIASAAN: 3, // jumlah tes awal per atlet yang tidak masuk benchmark (efek belajar)
+  REAKSI_MIN_BASIS: 5, // jumlah tes minimum agar benchmark/z sah
+  REAKSI_JENDELA_HARI: 56, // tes sebelumnya yang dipakai sebagai basis z
 });
 
 // Arah yang dianggap buruk: -1 = nilai turun itu buruk, +1 = nilai naik itu buruk.
@@ -658,12 +669,68 @@ function tambahSesi(catatan, sesiLog, peringatan, p = PARAM) {
   return hasil;
 }
 
+// Tes reaksi pagi: benchmark per atlet dan z-score terhadap tes-tes atlet itu sendiri.
+// Masukan: [{ id?, athlete_id?, waktu: ISO, rata_ms, n_percobaan?, perangkat?, tz_offset_menit? }]
+// Semua ambang adalah USULAN (lihat PARAM.REAKSI_*).
+
+const HARI_MS = 86400000;
+
+function tambahReaksi(tes, athlete_id, catatan, peringatan, p = PARAM) {
+  const tzAtlet = (a) => catatan.find((c) => c.athlete_id === a && c.tz_offset_menit != null)?.tz_offset_menit ?? 0;
+  const perAtlet = new Map();
+  for (const t of tes) {
+    const id = t.id ?? t.waktu;
+    const ms = Date.parse(t.waktu);
+    const nilai = Number(t.rata_ms);
+    if (!Number.isFinite(ms)) { peringatan.push(`tes reaksi ${id}: waktu tidak valid, dilewati`); continue; }
+    if (!Number.isFinite(nilai) || nilai < p.REAKSI_MIN_MS || nilai > p.REAKSI_MAKS_MS) {
+      peringatan.push(`tes reaksi ${id}: rata_ms ${t.rata_ms} di luar ${p.REAKSI_MIN_MS}-${p.REAKSI_MAKS_MS} ms, dilewati`);
+      continue;
+    }
+    const a = t.athlete_id ?? athlete_id;
+    const tz = t.tz_offset_menit ?? tzAtlet(a);
+    if (!perAtlet.has(a)) perAtlet.set(a, []);
+    perAtlet.get(a).push({ athlete_id: a, id, waktu_ms: ms, nilai, tanggal: bagianLokal(ms, tz).tanggal, perangkat: t.perangkat ?? null, n_percobaan: t.n_percobaan ?? null });
+  }
+
+  const reaksi = []; const benchmark = {};
+  for (const [a, arr] of perAtlet) {
+    arr.sort((x, y) => x.waktu_ms - y.waktu_ms);
+    arr.forEach((t, i) => {
+      const pembiasaan = i < p.REAKSI_PEMBIASAAN;
+      const basis = arr.filter((x, j) => j < i && j >= p.REAKSI_PEMBIASAAN && t.waktu_ms - x.waktu_ms <= p.REAKSI_JENDELA_HARI * HARI_MS).map((x) => x.nilai);
+      let z = null; let status = pembiasaan ? 'pembiasaan' : 'benchmark_belum_ada';
+      if (!pembiasaan && basis.length >= p.REAKSI_MIN_BASIS) {
+        const m = rata(basis); const s = simpangan(basis);
+        if (s > 0) { z = { z: bulat((t.nilai - m) / s, 2), rata_basis: bulat(m, 1), sd_basis: bulat(s, 1), n_basis: basis.length }; status = 'ok'; }
+      }
+      reaksi.push({ athlete_id: a, id: t.id, tanggal: t.tanggal, waktu_ms: t.waktu_ms, perangkat: t.perangkat, n_percobaan: t.n_percobaan, WRK: field('WRK', t.nilai, 'tes'), z, status });
+    });
+    const sah = arr.slice(p.REAKSI_PEMBIASAAN).map((x) => x.nilai);
+    benchmark[a] = {
+      n_total: arr.length, n_benchmark: sah.length, status: sah.length >= p.REAKSI_MIN_BASIS ? 'terbentuk' : 'belum_terbentuk',
+      rata_ms: sah.length ? bulat(rata(sah), 1) : null, median_ms: sah.length ? bulat(median(sah), 1) : null,
+      sd_ms: sah.length > 1 ? bulat(simpangan(sah), 1) : null, terbaik_ms: sah.length ? Math.min(...sah) : null,
+    };
+  }
+  reaksi.sort((x, y) => x.waktu_ms - y.waktu_ms);
+
+  // WRK ke catatan: tes pertama atlet itu pada tanggal catatan (semua vendor memakai tes yang sama).
+  for (const c of catatan) {
+    const r = reaksi.find((x) => x.athlete_id === c.athlete_id && x.tanggal === c.tanggal);
+    c.metrik.WRK = field('WRK', r ? r.WRK.nilai : null, 'tes', 'asli', r ? { id_tes: r.id, status: r.status, z: r.z?.z ?? null } : {});
+  }
+  return { reaksi, benchmark };
+}
+
 // Titik masuk modul penyeragaman data.
 //
 // harmonisasi({ athlete_id, whoop?, garmin?, sesi? }) -> { versi, catatan, sesi, peringatan }
 //   whoop : { sleeps, recoveries, cycles, workouts }  (objek mentah API WHOOP v2)
 //   garmin: { sleeps, hrv, dailies, stress, activities } (summary Garmin Health API)
 //   sesi  : log sesi esports dari pelatih/atlet:
+//   reaksi: tes reaksi pagi: [{ id?, athlete_id?, waktu: ISO, rata_ms, n_percobaan?, perangkat?, tz_offset_menit? }]
+//   sesi  : (lanjutan)
 //           [{ id?, mulai: ISO, selesai: ISO, srpe?: 0-10, kelelahan_mental?: 1-7, hr_rata?: bpm, jenis?, tz_offset_menit? }]
 //
 // Satu catatan = satu atlet x satu tanggal bangun x satu vendor. Catatan vendor yang berbeda TIDAK digabung.
@@ -683,7 +750,7 @@ function normalisasiSesi(sesi, athlete_id, peringatan) {
   return out;
 }
 
-function harmonisasi({ athlete_id, whoop = null, garmin = null, sesi = [] }, param = PARAM) {
+function harmonisasi({ athlete_id, whoop = null, garmin = null, sesi = [], reaksi: tesReaksi = [] }, param = PARAM) {
   if (!athlete_id) throw new Error('athlete_id wajib diisi');
   const peringatan = [];
   const catatan = [];
@@ -695,18 +762,18 @@ function harmonisasi({ athlete_id, whoop = null, garmin = null, sesi = [] }, par
   tambahRelatif(catatan, param);
   tambahTidurEsports(catatan, log, param);
   const sesiOut = tambahSesi(catatan, log, peringatan, param);
+  const { reaksi, benchmark } = tambahReaksi(tesReaksi, athlete_id, catatan, peringatan, param);
 
   return {
     versi: { kamus: VERSI_KAMUS, pemeta: VERSI_PEMETA, param },
-    catatan, sesi: sesiOut, peringatan,
+    catatan, sesi: sesiOut, reaksi, benchmark_reaksi: benchmark, peringatan,
   };
 }
 
 export { harmonisasi, petakanWhoop, petakanGarmin, KAMUS, VERSI_KAMUS, VERSI_PEMETA, PARAM, ALIAS };
 
 // ---------- CLI ----------
-
-// Hanya di Node (CLI). Di browser (aplikasi web) blok ini dilewati, jadi `process` dan `node:url` tidak disentuh.
+// Hanya di Node (CLI). Di browser blok ini dilewati, jadi `process` dan `node:url` tidak disentuh.
 const diNode = typeof globalThis.process !== 'undefined' && Array.isArray(globalThis.process.argv);
 if (diNode) import('node:url').then(({ fileURLToPath }) => { if (process.argv[1] === fileURLToPath(import.meta.url)) jalankanCli(); });
 
@@ -715,19 +782,21 @@ function jalankanCli() {
   if (arg === '--kamus') {
     for (const k of KAMUS) console.log(`${k.kode.padEnd(7)} [${k.level}] ${k.nama} (${k.unit})\n        ${k.definisi}`);
   } else if (arg === '--demo') {
-    const M = 60000; const sleeps = []; const recoveries = []; const cycles = [];
+    const M = 60000; const sleeps = []; const recoveries = []; const cycles = []; const reaksi = [];
     for (let i = 0; i < 21; i += 1) {
       const dtt = i === 20 ? 330 : i % 2 ? 440 : 420; const end = Date.UTC(2026, 10, 1 + i, 4, 0); const inbed = dtt + 20;
       sleeps.push({ id: 'sl-' + i, cycle_id: 100 + i, nap: false, score_state: 'SCORED', start: new Date(end - inbed * M).toISOString(), end: new Date(end).toISOString(), timezone_offset: '+00:00',
         score: { stage_summary: { total_in_bed_time_milli: inbed * M, total_awake_time_milli: 20 * M, total_light_sleep_time_milli: dtt * 0.55 * M, total_slow_wave_sleep_time_milli: dtt * 0.2 * M, total_rem_sleep_time_milli: dtt * 0.25 * M }, respiratory_rate: 14.5, sleep_performance_percentage: 85 } });
       recoveries.push({ cycle_id: 100 + i, sleep_id: 'sl-' + i, score_state: 'SCORED', score: { recovery_score: 70, resting_heart_rate: i === 20 ? 57 : i % 2 ? 51 : 49, hrv_rmssd_milli: i === 20 ? 44 : i % 2 ? 62 : 58, spo2_percentage: 96 } });
       cycles.push({ id: 100 + i, score_state: 'SCORED', score: { strain: 11, kilojoule: 9000 } });
+      reaksi.push({ id: 'rk-' + i, waktu: new Date(Date.UTC(2026, 10, 1 + i, 2, 0)).toISOString(), rata_ms: i === 20 ? 290 : 250 + (i % 4) * 3 });
     }
-    const h = harmonisasi({ athlete_id: 'ATLET-01', whoop: { sleeps, recoveries, cycles, workouts: [] },
+    const h = harmonisasi({ athlete_id: 'ATLET-01', whoop: { sleeps, recoveries, cycles, workouts: [] }, reaksi,
       sesi: [{ id: 'scrim-1', mulai: '2026-11-20T15:00:00Z', selesai: '2026-11-20T18:00:00Z', srpe: 7, kelelahan_mental: 5, hr_rata: 96 }] });
     const a = h.catatan.at(-1);
     console.log('DATA SINTETIS. Tanggal', a.tanggal);
-    for (const k of ['DTT', 'HRV_M', 'RHR', 'TTT', 'DTTT', 'JLT', 'BPR']) console.log(k.padEnd(6), String(a.metrik[k].nilai).padEnd(10), a.metrik[k].unit);
+    for (const k of ['DTT', 'HRV_M', 'RHR', 'TTT', 'DTTT', 'JLT', 'WRK', 'BPR']) console.log(k.padEnd(6), String(a.metrik[k].nilai).padEnd(10), a.metrik[k].unit);
+    console.log('Benchmark reaksi:', JSON.stringify(h.benchmark_reaksi));
     console.log('Sesi:', JSON.stringify(h.sesi.map((s) => ({ BSP: s.BSP.nilai, KMP: s.KMP.nilai, ROS: s.ROS.nilai }))));
   } else {
     console.log('Pakai: node harmonizer.mjs --demo | --kamus');

@@ -1,14 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { adaData, kategori, KAMUS_PER_KODE, NAMA_VENDOR, nilai, nilaiVendor, type HariTampil, type Nilai, type Vendor } from "./dataAtlet.js";
+import { adaData, kategori, KAMUS_PER_KODE, nilai, pertama, type HariTampil, type HasilSusun } from "./dataAtlet.js";
+import { PARAM_IND } from "./lib/indeks-esports.mjs";
 
 /**
- * Tampilan atlet bergaya aplikasi WHOOP, memakai istilah dari kamus harmonizer.
- * Setiap label adalah istilah kamus (definisi & kaveat muncul saat kursor diarahkan).
- * Metrik "serupa" (rumus vendor berbeda) selalu ditampilkan per vendor dan tidak pernah dicampur.
+ * Tampilan atlet bergaya aplikasi WHOOP. Bentuknya SELALU sama, dari perangkat mana pun datanya:
+ * tidak ada nama perangkat di layar. Metrik yang tidak tersedia disembunyikan, bukan diganti bentuk lain.
+ * Setiap label adalah istilah kamus harmonizer; Indeks Esports (IKB, IBMS) menampilkan cara hitungnya.
  */
 
-// Warna: status (selalu disertai label), satu hue per jenis metrik, dan palet tahapan tidur
-// yang sudah divalidasi (CVD & kontras) untuk latar gelap.
 const WARNA = {
   beban: "#3D9BF0",
   tidur: "#8BA7C4",
@@ -19,6 +18,7 @@ const WARNA = {
   merah: "#F0435A",
   netral: "#6E676B",
 };
+// Palet tahapan tidur sudah divalidasi (CVD & kontras) untuk latar gelap.
 const TAHAP = [
   { kode: "TJG", nama: "Terjaga", warna: "#C47A3E" },
   { kode: "TRG", nama: "Ringan", warna: "#2A9BB8" },
@@ -33,17 +33,30 @@ const TINGKAT_STRES = [
 ] as const;
 const HARI = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
-/** Pita warna Recovery WHOOP (aturan vendor, khusus SPV WHOOP). */
-function pitaSpv(skor: number) {
-  if (skor >= 67) return { warna: WARNA.hijau, label: "Hijau", ikon: "▲" };
-  if (skor >= 34) return { warna: WARNA.kuning, label: "Kuning", ikon: "●" };
-  return { warna: WARNA.merah, label: "Merah", ikon: "▼" };
+/** Pita warna skor 0-100 (sama untuk semua sumber). */
+function pita(skor: number) {
+  if (skor >= 67) return { warna: WARNA.hijau, label: "Hijau", ikon: "▲", arti: "Siap untuk beban tinggi" };
+  if (skor >= 34) return { warna: WARNA.kuning, label: "Kuning", ikon: "●", arti: "Beban sedang" };
+  return { warna: WARNA.merah, label: "Merah", ikon: "▼", arti: "Prioritaskan pemulihan" };
 }
+const PITA_IKB: Record<string, { warna: string; label: string; ikon: string; arti: string }> = {
+  normal: { warna: WARNA.hijau, label: "Normal", ikon: "▲", arti: `IKB ≥ ${PARAM_IND.PITA_NORMAL}` },
+  perhatian: { warna: WARNA.kuning, label: "Perhatian", ikon: "●", arti: `IKB ${PARAM_IND.PITA_PERHATIAN}–${PARAM_IND.PITA_NORMAL - 0.01}` },
+  rendah: { warna: WARNA.merah, label: "Rendah", ikon: "▼", arti: `IKB < ${PARAM_IND.PITA_PERHATIAN}` },
+};
 const BPR_INFO: Record<string, { warna: string; label: string; ikon: string; arti: string }> = {
   hijau: { warna: WARNA.hijau, label: "Hijau", ikon: "▲", arti: "Tidak ada metrik yang menyimpang dari basis atlet" },
   kuning: { warna: WARNA.kuning, label: "Kuning", ikon: "●", arti: "1 metrik menyimpang ≥1 SD ke arah buruk" },
   merah: { warna: WARNA.merah, label: "Merah", ikon: "▼", arti: "≥2 metrik menyimpang ≥1 SD ke arah buruk" },
   data_kurang: { warna: WARNA.netral, label: "Data kurang", ikon: "○", arti: "Butuh minimal 14 hari basis dari 28 hari terakhir" },
+};
+/** Komponen IKB: nama tampilan dan arti arah (s = +1: nilai naik itu baik). */
+const KOMPONEN_IKB: Record<string, string> = {
+  LNHRV: "ln HRV Malam",
+  DTT: "Durasi Tidur Total",
+  RHR: "Detak Jantung Istirahat",
+  KETERATURAN: "Keteraturan tidur",
+  BEBAN: "Beban sesi kemarin",
 };
 
 /** Menit -> "j:mm"; dibulatkan ke menit dulu agar 59,7 menit menjadi "1:00", bukan "0:60". */
@@ -63,24 +76,14 @@ const rata = (xs: (number | null | undefined)[]) => {
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 };
 
-/** Label istilah kamus; definisi dan kaveat tampil sebagai tooltip. */
+/** Label istilah kamus. Tooltip hanya memuat nama, kode, satuan, dan pengingat ke Kamus di About (tanpa nama perangkat). */
 function Istilah({ kode, children }: { kode: string; children?: ReactNode }) {
   const k = KAMUS_PER_KODE.get(kode);
   if (!k) return <>{children ?? kode}</>;
   return (
-    <abbr className="istilah" title={`${k.nama} (${k.kode}, ${k.unit})\n${k.definisi}\nCatatan: ${k.kaveat}`}>
+    <abbr className="istilah" title={`${k.nama} (${k.kode}, ${k.unit})\nDefinisi dan kaveat lengkap: tab About › Kamus Istilah.`}>
       {children ?? k.nama}
     </abbr>
-  );
-}
-
-function LabelSumber({ n }: { n: Nilai | null }) {
-  if (!n) return null;
-  return (
-    <span className="wh-asal">
-      {NAMA_VENDOR[n.vendor]}
-      {n.field.kualitas !== "asli" && n.field.kualitas !== "tidak_ada" ? ` · ${n.field.kualitas}` : ""}
-    </span>
   );
 }
 
@@ -262,19 +265,19 @@ function Mini({ label, nilai: v }: { label: ReactNode; nilai: ReactNode }) {
 
 // ───────────────────────── Panel utama ─────────────────────────
 
-const VITAL: { kode: string; d: number; naikBaik: boolean | null; perVendor?: boolean }[] = [
+const VITAL: { kode: string; d: number; naikBaik: boolean | null }[] = [
   { kode: "HRV_M", d: 0, naikBaik: true },
-  { kode: "RHR", d: 0, naikBaik: false, perVendor: true },
+  { kode: "RHR", d: 0, naikBaik: false },
   { kode: "LNP", d: 1, naikBaik: null },
   { kode: "SPO2_M", d: 1, naikBaik: null },
   { kode: "EKT", d: 0, naikBaik: null },
   { kode: "ET", d: 0, naikBaik: true },
 ];
 
-export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTampil[]; peringatan?: string[] }) {
-  // Satu-satunya hari berdata (mis. satu ekspor Garmin) tampil sendiri, tanpa 6 hari kosong.
-  const berdata = semuaHari.filter(adaData);
-  const hari = berdata.length > 1 ? semuaHari : berdata;
+export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
+  // Satu-satunya hari berdata tampil sendiri, tanpa 6 hari kosong.
+  const berdata = hasil.hari.filter(adaData);
+  const hari = berdata.length > 1 ? hasil.hari : berdata;
   const [pilih, setPilih] = useState(hari.length - 1);
   const i = Math.min(pilih, hari.length - 1);
   const h = hari[i];
@@ -283,43 +286,40 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
   const banyakHari = berdata.length > 1;
   const { hari: namaHari, tgl } = tglPendek(h.tanggal);
   const sumbu = (x: HariTampil) => tglPendek(x.tanggal);
-  const vendorHari = Object.keys(h.catatan) as Vendor[];
+  const adaDataHariIni = adaData(h);
 
   const bpr = kategori(h, "BPR");
   const bprInfo = BPR_INFO[bpr?.nilai ?? "data_kurang"] ?? BPR_INFO.data_kurang!;
   const rinciBpr = (bpr?.field.rincian ?? {}) as Record<string, { z: number; buruk: boolean }>;
 
-  const skt = nilai(h, "SKT");
-  const sktLain = skt ? nilaiVendor(h, "SKT", skt.vendor === "whoop" ? "garmin" : "whoop") : null;
-  const spv = nilaiVendor(h, "SPV", "whoop");
-  const bb = nilaiVendor(h, "BB", "garmin");
-  const bfh = nilaiVendor(h, "BFH", "whoop");
-  const toh = nilaiVendor(h, "TOH", "garmin");
+  // Tiga dial dengan slot tetap; isinya diambil dari metrik pertama yang tersedia, tanpa menyebut sumbernya.
+  const tidur = pertama(h, ["SKT"]);
+  const pulih = pertama(h, ["SPV", "BB"]);
+  const beban = pertama(h, ["BFH", "TOH"]);
+  const pulihPita = pulih ? pita(pulih.nilai) : null;
   const dtt = nilai(h, "DTT");
   const ttt = nilai(h, "TTT");
   const dttt = nilai(h, "DTTT");
-  const catTidur = h.catatan[dtt?.vendor ?? "whoop"];
+  const catTidur = (Object.values(h.catatan) as NonNullable<HariTampil["catatan"][keyof HariTampil["catatan"]]>[]).find((c) => c.jendela_tidur);
 
-  const adaSpv = hari.some((x) => nilaiVendor(x, "SPV", "whoop"));
-  const adaBfh = hari.some((x) => nilaiVendor(x, "BFH", "whoop"));
+  const adaPulih = hari.some((x) => pertama(x, ["SPV", "BB"]));
   const adaDtt = hari.some((x) => nilai(x, "DTT"));
+  const adaIkb = hari.some((x) => x.ikb?.status === "ok");
   const maksTidurJam = Math.max(10, Math.ceil(Math.max(...hari.map((x) => TAHAP.reduce((a, g) => a + (nilai(x, g.kode)?.nilai ?? 0), 0) / 60))));
+
+  const ikb = h.ikb;
+  const ibms7 = hasil.ibms7[0] ?? null;
 
   return (
     <section className="wh" aria-label="Data atlet">
       <header className="wh-kepala">
         <div className="wh-merek">
-          {vendorHari.length === 0 && <span className="wh-sumber">Tidak ada data hari ini</span>}
-          {vendorHari.map((v) => (
-            <span key={v} className="wh-sumber whoop">
-              {NAMA_VENDOR[v]}
-            </span>
-          ))}
           <span className="wh-label">
             {namaHari}, {tgl} {new Date(`${h.tanggal}T12:00:00Z`).toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+            {!adaDataHariIni && " · tidak ada data hari ini"}
           </span>
         </div>
-        {vendorHari.length > 0 && (
+        {adaDataHariIni && (
           <div className="wh-bpr" style={{ borderColor: bprInfo.warna }}>
             <span className="wh-label">
               <Istilah kode="BPR" />
@@ -345,12 +345,12 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
         <nav className="wh-hari" aria-label="Pilih hari" style={{ gridTemplateColumns: `repeat(${hari.length}, minmax(0, 1fr))` }}>
           {hari.map((x, k) => {
             const d = sumbu(x);
-            const s = nilaiVendor(x, "SPV", "whoop");
+            const p = pertama(x, ["SPV", "BB"]);
             return (
               <button key={x.tanggal} className={k === i ? "aktif" : ""} onClick={() => setPilih(k)} aria-pressed={k === i}>
                 <span>{d.hari}</span>
                 <b>{d.tgl}</b>
-                <i style={{ background: s ? pitaSpv(s.nilai).warna : adaData(x) ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.15)" }} aria-hidden="true" />
+                <i style={{ background: p ? pita(p.nilai).warna : adaData(x) ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.15)" }} aria-hidden="true" />
               </button>
             );
           })}
@@ -360,83 +360,175 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
       <div className="wh-dial-baris">
         <Dial
           judul={<Istilah kode="SKT">Kualitas Tidur</Istilah>}
-          nilai={skt?.nilai ?? null}
+          nilai={tidur?.nilai ?? null}
           maks={100}
           warna={WARNA.tidur}
-          teks={skt ? `${angka(skt.nilai)}${skt.vendor === "whoop" ? "%" : ""}` : "–"}
+          teks={tidur ? angka(tidur.nilai) : "–"}
+          bawah={tidur ? "skor 0–100" : "Tidak ada data"}
+        />
+        <Dial
+          judul={<Istilah kode={pulih?.kode ?? "SPV"}>Pemulihan</Istilah>}
+          nilai={pulih?.nilai ?? null}
+          maks={100}
+          warna={pulihPita?.warna ?? WARNA.netral}
+          teks={pulih ? angka(pulih.nilai) : "–"}
+          ukuran={200}
           bawah={
-            skt ? (
-              <>
-                {String(skt.field.nama_vendor ?? "")} · {NAMA_VENDOR[skt.vendor]}
-                {sktLain && (
-                  <>
-                    <br />
-                    {String(sktLain.field.nama_vendor ?? "")} {NAMA_VENDOR[sktLain.vendor]}: {angka(sktLain.nilai)}
-                  </>
-                )}
-              </>
+            pulihPita ? (
+              <span className="wh-status">
+                <span style={{ color: pulihPita.warna }} aria-hidden="true">
+                  {pulihPita.ikon}
+                </span>{" "}
+                {pulihPita.label} · {pulihPita.arti}
+              </span>
             ) : (
               "Tidak ada data"
             )
           }
         />
-        {spv ? (
-          <Dial
-            judul={<Istilah kode="SPV">Pemulihan</Istilah>}
-            nilai={spv.nilai}
-            maks={100}
-            warna={pitaSpv(spv.nilai).warna}
-            teks={`${angka(spv.nilai)}%`}
-            ukuran={200}
-            bawah={
-              <span className="wh-status">
-                <span style={{ color: pitaSpv(spv.nilai).warna }} aria-hidden="true">
-                  {pitaSpv(spv.nilai).ikon}
-                </span>{" "}
-                WHOOP Recovery · {pitaSpv(spv.nilai).label}
-                {spv.field.kualitas === "kalibrasi" ? " · kalibrasi" : ""}
+        <Dial
+          judul={<Istilah kode={beban?.kode ?? "BFH"}>Beban Harian</Istilah>}
+          nilai={beban?.nilai ?? null}
+          maks={beban?.kode === "TOH" ? 100 : 21}
+          warna={beban?.kode === "TOH" ? WARNA.stres : WARNA.beban}
+          teks={beban ? angka(beban.nilai, beban.kode === "TOH" ? 0 : 1) : "–"}
+          bawah={beban ? `skala 0–${beban.kode === "TOH" ? 100 : 21}` : "Tidak ada data"}
+        />
+      </div>
+
+      {/* ───────── Indeks Esports: nilai + cara hitung ───────── */}
+      <div className="wh-indeks">
+        <div className="wh-kartu">
+          <div className="wh-grafik-kepala">
+            <h3>Indeks Kesiapan Bermain (IKB)</h3>
+            <span className="wh-label">usulan · belum divalidasi untuk esports</span>
+          </div>
+          {ikb && ikb.status === "ok" && ikb.nilai !== null ? (
+            <>
+              <div className="wh-ikb-atas">
+                <b className="wh-ikb-angka" style={{ color: PITA_IKB[ikb.pita ?? "normal"]!.warna }}>
+                  {angka(ikb.nilai, 1)}
+                </b>
+                <span>
+                  <span style={{ color: PITA_IKB[ikb.pita ?? "normal"]!.warna }} aria-hidden="true">
+                    {PITA_IKB[ikb.pita ?? "normal"]!.ikon}
+                  </span>{" "}
+                  <b>{PITA_IKB[ikb.pita ?? "normal"]!.label}</b>
+                  <br />
+                  <small className="wh-label">
+                    {PITA_IKB[ikb.pita ?? "normal"]!.arti} · {ikb.n_komponen} dari {Object.keys(PARAM_IND.BOBOT).length} komponen
+                  </small>
+                </span>
+              </div>
+              <div className="table-wrap wh-tabel-ikb">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Komponen</th>
+                      <th>z</th>
+                      <th>Bobot w</th>
+                      <th>Arah s</th>
+                      <th>w × s × z</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(ikb.komponen).map(([k, c]) => (
+                      <tr key={k}>
+                        <td>{KOMPONEN_IKB[k] ?? k}</td>
+                        <td>{c.z !== null ? angka(c.z, 2) : "–"}</td>
+                        <td>{angka(c.w, 2)}</td>
+                        <td>{c.s > 0 ? "+1" : "−1"}</td>
+                        <td>{c.kontribusi !== null ? angka(c.kontribusi, 3) : "–"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="wh-rumus">
+                IKB = 50 + 10 × Σ(w·s·z) ÷ Σw = 50 + 10 × {angka(Object.values(ikb.komponen).reduce((a, c) => a + (c.kontribusi ?? 0), 0), 3)} ÷{" "}
+                {angka(Object.values(ikb.komponen).reduce((a, c) => a + c.w, 0), 2)} = <b>{angka(ikb.nilai, 1)}</b>
+              </p>
+            </>
+          ) : (
+            <p className="wh-kosong">
+              Belum cukup data: IKB butuh minimal {PARAM_IND.MIN_KOMP_IKB} komponen yang punya basis ≥{PARAM_IND.MIN_BASIS} hari dari {PARAM_IND.JENDELA_BASIS} hari terakhir
+              {ikb ? ` (tersedia ${ikb.n_komponen}).` : "."}
+            </p>
+          )}
+          <details className="wh-cara">
+            <summary>Cara menghitung IKB</summary>
+            <ol>
+              <li>
+                Tiap komponen diubah menjadi <b>z-score terhadap diri sendiri</b>: z = (nilai hari ini − rata-rata {PARAM_IND.JENDELA_BASIS} hari sebelumnya) ÷ simpangan baku.
+                Komponen yang basisnya &lt; {PARAM_IND.MIN_BASIS} hari dikeluarkan.
+              </li>
+              <li>z dibatasi ke ±{PARAM_IND.BATAS_Z} agar satu hari ekstrem tidak mendominasi.</li>
+              <li>
+                Setiap komponen dikali bobot <b>w</b> dan arah <b>s</b> (+1 bila nilai naik itu baik, −1 bila buruk):{" "}
+                {Object.entries(PARAM_IND.BOBOT)
+                  .map(([k, b]) => `${KOMPONEN_IKB[k] ?? k} (w ${b.w}, s ${b.s > 0 ? "+1" : "−1"})`)
+                  .join("; ")}
+                .
+              </li>
+              <li>
+                IKB = 50 + 10 × Σ(w·s·z) ÷ Σw, dengan Σ hanya atas komponen yang tersedia (minimal {PARAM_IND.MIN_KOMP_IKB}). Skor 50 berarti sama dengan kebiasaan atlet sendiri.
+              </li>
+              <li>
+                Pita: ≥ {PARAM_IND.PITA_NORMAL} <b>Normal</b>; {PARAM_IND.PITA_PERHATIAN}–{PARAM_IND.PITA_NORMAL - 0.01} <b>Perhatian</b>; &lt; {PARAM_IND.PITA_PERHATIAN} <b>Rendah</b>.
+              </li>
+              <li>Keteraturan = −|DTTT| ÷ SD(TTT {PARAM_IND.JENDELA_BASIS} hari): makin menyimpang jadwal tidurnya dari biasanya, makin rendah. Beban sesi kemarin memakai BSP kemarin terhadap sesi-sesi sebelumnya.</li>
+            </ol>
+            <p className="wh-label">Penanda kesiapan relatif terhadap diri sendiri, bukan ukuran kognisi, dan bukan alat seleksi.</p>
+          </details>
+        </div>
+
+        <div className="wh-kartu">
+          <div className="wh-grafik-kepala">
+            <h3>Indeks Beban Mental Sesi (IBMS)</h3>
+            <span className="wh-label">per sesi · rata-rata {PARAM_IND.HARI_IBMS} hari</span>
+          </div>
+          {ibms7 && ibms7.nilai !== null ? (
+            <div className="wh-ikb-atas">
+              <b className="wh-ikb-angka">{angka(ibms7.nilai, 1)}</b>
+              <span>
+                <b>Rata-rata {PARAM_IND.HARI_IBMS} hari</b>
+                <br />
+                <small className="wh-label">
+                  {ibms7.n_sesi} sesi sampai {ibms7.sampai_tanggal}
+                  {ibms7.z_terhadap_riwayat !== null ? ` · z ${angka(ibms7.z_terhadap_riwayat, 2)} terhadap riwayat` : ""}
+                </small>
               </span>
-            }
-          />
-        ) : bb ? (
-          <Dial judul={<Istilah kode="BB">Body Battery</Istilah>} nilai={bb.nilai} maks={100} warna={WARNA.energi} teks={angka(bb.nilai)} ukuran={200} bawah="Maks harian · Garmin" />
-        ) : (
-          <Dial judul={<Istilah kode="SPV">Pemulihan</Istilah>} nilai={null} maks={100} warna={WARNA.hijau} teks="–" ukuran={200} bawah="Tidak ada data" />
-        )}
-        {bfh ? (
-          <Dial
-            judul={<Istilah kode="BFH">Beban Harian</Istilah>}
-            nilai={bfh.nilai}
-            maks={21}
-            warna={WARNA.beban}
-            teks={angka(bfh.nilai, 1)}
-            bawah="WHOOP Day Strain · skala 0–21"
-          />
-        ) : toh ? (
-          <Dial
-            judul={<Istilah kode="TOH">Tegangan Otonom</Istilah>}
-            nilai={toh.nilai}
-            maks={100}
-            warna={WARNA.stres}
-            teks={angka(toh.nilai)}
-            bawah={`Garmin stress · skala 0–100${h.rinciGarmin?.stres?.puncak != null ? ` · puncak ${h.rinciGarmin.stres.puncak}` : ""}`}
-          />
-        ) : (
-          <Dial judul={<Istilah kode="BFH">Beban Harian</Istilah>} nilai={null} maks={21} warna={WARNA.beban} teks="–" bawah="Tidak ada data" />
-        )}
+            </div>
+          ) : (
+            <p className="wh-kosong">Belum ada log sesi (jam mulai/selesai, sRPE, kelelahan mental) untuk atlet ini, jadi IBMS belum bisa dihitung.</p>
+          )}
+          <details className="wh-cara">
+            <summary>Cara menghitung IBMS</summary>
+            <ol>
+              <li>
+                Tiap sesi punya tiga komponen: <Istilah kode="BSP" /> (sRPE × menit), <Istilah kode="KMP" />, dan <Istilah kode="ROS" />.
+              </li>
+              <li>
+                Masing-masing diubah ke z-score terhadap sesi-sesi <b>sebelumnya</b> milik atlet yang sama ({PARAM_IND.JENDELA_SESI_HARI} hari terakhir, minimal {PARAM_IND.MIN_SESI} sesi), dibatasi ±{PARAM_IND.BATAS_Z}.
+              </li>
+              <li>
+                IBMS sesi = 50 + 10 × rata-rata z komponen yang tersedia (minimal {PARAM_IND.MIN_KOMP_IBMS}). Contoh: z BSP 1,0, KMP 0,5, ROS 1,5 → 50 + 10 × 1,0 = 60; tanpa KMP → 62,5.
+              </li>
+              <li>
+                IBMS {PARAM_IND.HARI_IBMS} hari = rata-rata IBMS sesi dalam {PARAM_IND.HARI_IBMS} hari terakhir; z-nya dibandingkan dengan rata-rata {PARAM_IND.HARI_IBMS} hari terdahulu (minimal {PARAM_IND.MIN_RATA7}).
+              </li>
+            </ol>
+          </details>
+        </div>
       </div>
 
       <div className="wh-vital">
         {VITAL.map((v) => {
-          const daftar = v.perVendor
-            ? (["whoop", "garmin"] as Vendor[]).map((x) => nilaiVendor(h, v.kode, x)).filter((x): x is Nilai => !!x)
-            : [nilai(h, v.kode)].filter((x): x is Nilai => !!x);
-          if (daftar.length === 0 && !hari.some((x) => nilai(x, v.kode))) return null;
+          const n = nilai(h, v.kode);
+          if (!n && !hari.some((x) => nilai(x, v.kode))) return null;
           const k = KAMUS_PER_KODE.get(v.kode)!;
-          const utama = daftar[0] ?? null;
-          // Perbandingan hanya terhadap hari lain dari vendor yang sama.
-          const r = utama ? rata(lain.map((x) => nilaiVendor(x, v.kode, utama.vendor)?.nilai)) : null;
-          const selisih = utama && r != null ? utama.nilai - r : null;
+          const r = n ? rata(lain.map((x) => nilai(x, v.kode)?.nilai)) : null;
+          const selisih = n && r != null ? n.nilai - r : null;
           const arah = selisih == null || Math.abs(selisih) < 10 ** -v.d ? 0 : selisih > 0 ? 1 : -1;
           const baik = v.naikBaik === null || arah === 0 ? null : (arah > 0) === v.naikBaik;
           return (
@@ -444,25 +536,17 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
               <span className="wh-label">
                 <Istilah kode={v.kode} />
               </span>
-              {daftar.length === 0 ? (
-                <b>–</b>
-              ) : (
-                daftar.map((x) => (
-                  <b key={x.vendor}>
-                    {angka(x.nilai, v.d)}
-                    <small> {k.unit === "napas/menit" ? "/mnt" : k.unit}</small>
-                    {daftar.length > 1 && <small className="wh-asal-inline"> {NAMA_VENDOR[x.vendor]}</small>}
-                  </b>
-                ))
-              )}
-              <span className="wh-vital-kaki">
-                {daftar.length === 1 && <LabelSumber n={utama} />}
-                {banyakHari && selisih != null && (
+              <b>
+                {n ? angka(n.nilai, v.d) : "–"}
+                {n && <small> {k.unit === "napas/menit" ? "/mnt" : k.unit}</small>}
+              </b>
+              {banyakHari && selisih != null && (
+                <span className="wh-vital-kaki">
                   <span className={`wh-delta ${baik === null ? "" : baik ? "baik" : "buruk"}`}>
                     {`${arah > 0 ? "↑" : arah < 0 ? "↓" : "="} ${angka(Math.abs(selisih), v.d)} vs rata-rata`}
                   </span>
-                )}
-              </span>
+                </span>
+              )}
             </div>
           );
         })}
@@ -490,16 +574,45 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
         )}
       </div>
 
-      {banyakHari && (adaSpv || adaBfh || adaDtt) && (
+      {banyakHari && (adaIkb || adaPulih || adaDtt) && (
         <div className="wh-grid">
-          {adaSpv && (
+          {adaIkb && (
+            <GrafikKolom
+              judul="Kesiapan Bermain 7 hari"
+              ringkas="Indeks Kesiapan Bermain 7 hari"
+              maks={100}
+              tanda={[0, 50, 100]}
+              pilih={i}
+              ubah={setPilih}
+              legenda={
+                <Legenda
+                  isi={[
+                    { kunci: "n", nama: `Normal ≥${PARAM_IND.PITA_NORMAL}`, warna: WARNA.hijau },
+                    { kunci: "p", nama: `Perhatian ≥${PARAM_IND.PITA_PERHATIAN}`, warna: WARNA.kuning },
+                    { kunci: "r", nama: "Rendah", warna: WARNA.merah },
+                  ]}
+                />
+              }
+              data={hari.map((x) => {
+                const k = x.ikb?.status === "ok" && x.ikb.nilai !== null ? x.ikb : null;
+                return {
+                  label: sumbu(x).hari,
+                  sub: String(sumbu(x).tgl),
+                  segmen: k ? [{ nilai: k.nilai!, warna: PITA_IKB[k.pita ?? "normal"]!.warna }] : [],
+                  teks: k ? angka(k.nilai!) : "–",
+                  tip: k ? [`IKB ${angka(k.nilai!, 1)} · ${PITA_IKB[k.pita ?? "normal"]!.label}`, `${k.n_komponen} komponen`] : ["Belum cukup data"],
+                };
+              })}
+            />
+          )}
+          {adaPulih && (
             <GrafikKolom
               judul={
                 <>
                   <Istilah kode="SPV">Pemulihan</Istilah> 7 hari
                 </>
               }
-              ringkas="Skor Pemulihan Vendor 7 hari"
+              ringkas="Skor pemulihan 7 hari"
               maks={100}
               tanda={[0, 33, 66, 100]}
               pilih={i}
@@ -514,38 +627,14 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
                 />
               }
               data={hari.map((x) => {
-                const s = nilaiVendor(x, "SPV", "whoop");
+                const s = pertama(x, ["SPV", "BB"]);
                 const hrv = nilai(x, "HRV_M");
                 return {
                   label: sumbu(x).hari,
                   sub: String(sumbu(x).tgl),
-                  segmen: s ? [{ nilai: s.nilai, warna: pitaSpv(s.nilai).warna }] : [],
+                  segmen: s ? [{ nilai: s.nilai, warna: pita(s.nilai).warna }] : [],
                   teks: s ? angka(s.nilai) : "–",
-                  tip: s ? [`WHOOP Recovery ${angka(s.nilai)}% · ${pitaSpv(s.nilai).label}`, `HRV Malam ${hrv ? angka(hrv.nilai) : "–"} ms`] : ["Tidak ada data"],
-                };
-              })}
-            />
-          )}
-          {adaBfh && (
-            <GrafikKolom
-              judul={
-                <>
-                  <Istilah kode="BFH">Beban Harian</Istilah> 7 hari
-                </>
-              }
-              ringkas="Beban Fisiologis Harian 7 hari"
-              maks={21}
-              tanda={[0, 7, 14, 21]}
-              pilih={i}
-              ubah={setPilih}
-              data={hari.map((x) => {
-                const b = nilaiVendor(x, "BFH", "whoop");
-                return {
-                  label: sumbu(x).hari,
-                  sub: String(sumbu(x).tgl),
-                  segmen: b ? [{ nilai: b.nilai, warna: WARNA.beban }] : [],
-                  teks: b ? angka(b.nilai, 1) : "–",
-                  tip: b ? [`WHOOP Day Strain ${angka(b.nilai, 1)} / 21`, `${x.aktivitas.length} aktivitas`] : ["Tidak ada data"],
+                  tip: s ? [`Pemulihan ${angka(s.nilai)} · ${pita(s.nilai).label}`, `HRV Malam ${hrv ? angka(hrv.nilai) : "–"} ms`] : ["Tidak ada data"],
                 };
               })}
             />
@@ -585,12 +674,11 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
               <h3>
                 <Istilah kode="DTT">Tidur</Istilah>
               </h3>
-              <span className="wh-label">
-                {catTidur?.jendela_tidur
-                  ? `${jamLokal(catTidur.jendela_tidur.mulai_ms, catTidur.tz_offset_menit)} – ${jamLokal(catTidur.jendela_tidur.selesai_ms, catTidur.tz_offset_menit)} · `
-                  : ""}
-                {NAMA_VENDOR[dtt.vendor]}
-              </span>
+              {catTidur?.jendela_tidur && (
+                <span className="wh-label">
+                  {jamLokal(catTidur.jendela_tidur.mulai_ms, catTidur.tz_offset_menit)} – {jamLokal(catTidur.jendela_tidur.selesai_ms, catTidur.tz_offset_menit)}
+                </span>
+              )}
             </div>
             <BarTumpuk
               label="Tahapan tidur"
@@ -599,19 +687,7 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
             <div className="wh-mini">
               <Mini label={<Istilah kode="DTT">Durasi tidur</Istilah>} nilai={jm(dtt.nilai)} />
               {nilai(h, "WTT") && <Mini label={<Istilah kode="WTT">Di tempat tidur</Istilah>} nilai={jm(nilai(h, "WTT")!.nilai)} />}
-              {nilai(h, "ET") && (
-                <Mini
-                  label={<Istilah kode="ET">Efisiensi</Istilah>}
-                  nilai={
-                    <>
-                      {angka(nilai(h, "ET")!.nilai)}%
-                      {typeof nilai(h, "ET")!.field.pembanding_vendor === "number" && (
-                        <small className="wh-asal-inline"> vendor {angka(nilai(h, "ET")!.field.pembanding_vendor as number)}%</small>
-                      )}
-                    </>
-                  }
-                />
-              )}
+              {nilai(h, "ET") && <Mini label={<Istilah kode="ET">Efisiensi</Istilah>} nilai={`${angka(nilai(h, "ET")!.nilai)}%`} />}
               {nilai(h, "LNP") && <Mini label={<Istilah kode="LNP">Laju napas</Istilah>} nilai={`${angka(nilai(h, "LNP")!.nilai, 1)}/mnt`} />}
             </div>
           </div>
@@ -623,35 +699,34 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
               <h3>
                 <Istilah kode="TOH">Tegangan Otonom</Istilah>: rincian durasi
               </h3>
-              <span className="wh-label">Garmin</span>
             </div>
             <BarTumpuk
-              label="Durasi per tingkat stres Garmin"
+              label="Durasi per tingkat stres"
               isi={TINGKAT_STRES.map((g) => ({ kunci: g.kunci, nama: g.nama, warna: g.warna, menit: h.rinciGarmin!.stres![g.kunci] ?? 0 }))}
             />
           </div>
         )}
 
-        {bb && (
+        {h.rinciGarmin?.bb && nilai(h, "BB") && (
           <div className="wh-kartu">
             <div className="wh-grafik-kepala">
               <h3>
-                <Istilah kode="BB" />
+                <Istilah kode="BB">Body Battery</Istilah>
               </h3>
-              <span className="wh-label">Garmin · skala 0–100</span>
+              <span className="wh-label">skala 0–100</span>
             </div>
-            <div className="wh-bb" role="img" aria-label={`Body Battery terendah ${h.rinciGarmin?.bb?.min ?? "–"}, tertinggi ${bb.nilai}`}>
-              {h.rinciGarmin?.bb?.min != null && <span style={{ left: `${h.rinciGarmin.bb.min}%`, width: `${Math.max(1, bb.nilai - h.rinciGarmin.bb.min)}%` }} />}
+            <div className="wh-bb" role="img" aria-label={`Body Battery terendah ${h.rinciGarmin.bb.min ?? "–"}, tertinggi ${nilai(h, "BB")!.nilai}`}>
+              {h.rinciGarmin.bb.min != null && <span style={{ left: `${h.rinciGarmin.bb.min}%`, width: `${Math.max(1, nilai(h, "BB")!.nilai - h.rinciGarmin.bb.min)}%` }} />}
             </div>
             <div className="wh-bb-sumbu">
               <span>0</span>
               <span>100</span>
             </div>
             <div className="wh-mini">
-              <Mini label="Maks harian" nilai={angka(bb.nilai)} />
-              {h.rinciGarmin?.bb?.min != null && <Mini label="Terendah" nilai={angka(h.rinciGarmin.bb.min)} />}
-              {h.rinciGarmin?.bb?.isi != null && <Mini label="Terisi" nilai={`+${h.rinciGarmin.bb.isi}`} />}
-              {h.rinciGarmin?.bb?.pakai != null && <Mini label="Terpakai" nilai={`−${h.rinciGarmin.bb.pakai}`} />}
+              <Mini label="Maks harian" nilai={angka(nilai(h, "BB")!.nilai)} />
+              {h.rinciGarmin.bb.min != null && <Mini label="Terendah" nilai={angka(h.rinciGarmin.bb.min)} />}
+              {h.rinciGarmin.bb.isi != null && <Mini label="Terisi" nilai={`+${h.rinciGarmin.bb.isi}`} />}
+              {h.rinciGarmin.bb.pakai != null && <Mini label="Terpakai" nilai={`−${h.rinciGarmin.bb.pakai}`} />}
             </div>
           </div>
         )}
@@ -664,7 +739,7 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
             </div>
             <ul className="wh-latihan">
               {h.aktivitas.map((a, k) => {
-                const tz = h.catatan[a.sumber as Vendor]?.tz_offset_menit ?? null;
+                const tz = Object.values(h.catatan).find((c) => c?.tz_offset_menit != null)?.tz_offset_menit ?? null;
                 return (
                   <li key={k}>
                     <Dial judul="" nilai={a.strain} maks={21} warna={WARNA.beban} teks={a.strain != null ? angka(a.strain, 1) : "–"} ukuran={56} />
@@ -672,7 +747,7 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
                       <div className="wh-latihan-kepala">
                         <b>{(a.jenis ?? "aktivitas").replace(/[-_]/g, " ")}</b>
                         <span className="wh-label">
-                          {jamLokal(a.mulai_ms, tz)} – {jamLokal(a.selesai_ms, tz)} · {NAMA_VENDOR[a.sumber as Vendor] ?? a.sumber}
+                          {jamLokal(a.mulai_ms, tz)} – {jamLokal(a.selesai_ms, tz)}
                         </span>
                       </div>
                       <div className="wh-latihan-angka">
@@ -688,25 +763,6 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
             </ul>
           </div>
         )}
-
-        <div className="wh-kartu">
-          <div className="wh-grafik-kepala">
-            <h3>Metrik sesi esports</h3>
-            <span className="wh-label">butuh log sesi</span>
-          </div>
-          <p className="wh-kosong">
-            Dihitung dari log sesi (jam mulai/selesai, sRPE, kelelahan mental) yang digabung dengan data perangkat. Belum ada log sesi asli
-            untuk atlet ini.
-          </p>
-          <ul className="wh-istilah-sesi">
-            {["MMH", "JLT", "BSP", "KMP", "ROS"].map((kode) => (
-              <li key={kode}>
-                <Istilah kode={kode} />
-                <small>{KAMUS_PER_KODE.get(kode)?.unit}</small>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
 
       {banyakHari && (
@@ -717,12 +773,12 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
               <thead>
                 <tr>
                   <th>Hari</th>
+                  <th>IKB</th>
                   {["BPR", "SPV", "HRV_M", "RHR", "BFH", "DTT", "ET", "TTT"].map((k) => (
                     <th key={k}>
                       <Istilah kode={k}>{k}</Istilah>
                     </th>
                   ))}
-                  <th>Sumber</th>
                 </tr>
               </thead>
               <tbody>
@@ -733,38 +789,21 @@ export function PanelAtlet({ hari: semuaHari, peringatan = [] }: { hari: HariTam
                       <td>
                         {sumbu(x).hari} {sumbu(x).tgl}
                       </td>
+                      <td>{x.ikb?.status === "ok" && x.ikb.nilai !== null ? angka(x.ikb.nilai, 1) : "–"}</td>
                       <td>{BPR_INFO[kategori(x, "BPR")?.nilai ?? ""]?.label ?? "–"}</td>
                       <td>{f("SPV")}</td>
                       <td>{f("HRV_M")}</td>
-                      <td>
-                        {(["whoop", "garmin"] as Vendor[])
-                          .map((v) => nilaiVendor(x, "RHR", v))
-                          .filter((n): n is Nilai => !!n)
-                          .map((n) => `${angka(n.nilai)} (${NAMA_VENDOR[n.vendor]})`)
-                          .join(" · ") || "–"}
-                      </td>
+                      <td>{f("RHR")}</td>
                       <td>{f("BFH", 1)}</td>
                       <td>{nilai(x, "DTT") ? jm(nilai(x, "DTT")!.nilai) : "–"}</td>
                       <td>{f("ET")}</td>
                       <td>{String(nilai(x, "TTT")?.field.jam_lokal ?? "–")}</td>
-                      <td>{(Object.keys(x.catatan) as Vendor[]).map((v) => NAMA_VENDOR[v]).join(", ") || "–"}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-        </details>
-      )}
-
-      {peringatan.length > 0 && (
-        <details className="wh-tabel">
-          <summary>Catatan penyeragaman data ({peringatan.length})</summary>
-          <ul className="wh-peringatan">
-            {peringatan.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
         </details>
       )}
     </section>
