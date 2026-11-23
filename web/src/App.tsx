@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { tarikGarmin } from "./garminLive.js";
+import { muatGarminTersimpan, tarikGarmin } from "./garminLive.js";
 import { whoop } from "./whoopApi.js";
 import { HalamanAbout } from "./pages/about.js";
 import { Dashboard } from "./dashboard.js";
@@ -91,6 +91,13 @@ function Aplikasi({
   const [idAtlet, setIdAtlet] = useState("");
   const atletTerpilih = daftarNama.find((a) => a.id === idAtlet) ?? daftarNama[0];
   const [tarik, setTarik] = useState<{ sibuk: boolean; ok?: boolean; teks?: string }>({ sibuk: false });
+  // Data Garmin yang sudah tersimpan di database server dimuat otomatis; diperbarui tiap 5 menit (server sinkron tiap jam).
+  useEffect(() => {
+    void muatGarminTersimpan();
+    const t = setInterval(() => void muatGarminTersimpan(), 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   // Pesan sesudah kembali dari halaman login Whoop (?whoop=terhubung|ditolak|gagal|belum-diatur).
   const [hasilWhoop, setHasilWhoop] = useState(() => new URLSearchParams(location.search).get("whoop"));
   useEffect(() => {

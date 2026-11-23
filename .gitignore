@@ -7,3 +7,4 @@ dist-web/
 .env
 servers/*/data/
 servers/*/node_modules/
+/data/

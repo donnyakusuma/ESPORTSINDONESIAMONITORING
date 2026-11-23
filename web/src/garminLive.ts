@@ -30,6 +30,16 @@ async function panggil(url: string, init?: RequestInit): Promise<{ ok: boolean; 
   }
 }
 
+/** Muat data Garmin yang tersimpan di database server (hasil sinkron otomatis), tanpa login ulang. */
+export async function muatGarminTersimpan() {
+  const r = await panggil("/api/garmin/saved");
+  if (!r.ok) return;
+  const daftar = r.atlet as { atletId: string; nama: string; terakhir: { tanggal: string; data: Baris } | null }[];
+  const baru = { ...simpan };
+  for (const a of daftar) if (a.terakhir) baru[a.atletId] = { nama: a.nama, tanggal: a.terakhir.tanggal, data: a.terakhir.data };
+  ubah(baru);
+}
+
 export async function tarikGarmin(atletId: string, tanggal: string): Promise<{ ok: boolean; pesan: string }> {
   const r = await panggil(`/api/garmin/stats?atlet=${encodeURIComponent(atletId)}&tanggal=${tanggal}`);
   if (!r.ok) return { ok: false, pesan: r.pesan ?? "Gagal menarik data." };

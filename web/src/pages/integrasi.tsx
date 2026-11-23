@@ -358,6 +358,7 @@ function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
   const [password, setPassword] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [umpan, setUmpan] = useState<{ ok: boolean; teks: string } | null>(null);
+  const [ganti, setGanti] = useState(false);
   const terhubung = live[id];
 
   async function jalan(f: () => Promise<{ ok: boolean; pesan: string }>) {
@@ -365,7 +366,10 @@ function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
     setUmpan(null);
     const r = await f();
     setUmpan({ ok: r.ok, teks: r.pesan });
-    if (r.ok) setPassword("");
+    if (r.ok) {
+      setPassword("");
+      setGanti(false);
+    }
     setSibuk(false);
   }
 
@@ -392,34 +396,50 @@ function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Username Garmin (email)</span>
-          <input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Password Garmin</span>
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        <div className="row">
-          <button className="btn utama" disabled={sibuk || !id}>
-            {sibuk ? "Menghubungkan…" : terhubung ? "Masuk ulang & tarik data" : "Masuk & tarik data"}
-          </button>
-          {terhubung && (
-            <>
-              <button type="button" className="btn" disabled={sibuk} onClick={() => void jalan(() => tarikGarmin(id, hariIni))}>
-                Tarik ulang
+        {terhubung && !ganti ? (
+          <>
+            <p>
+              <b>Terhubung ke akun {terhubung.nama}.</b> Sesi tersimpan di server, jadi tidak perlu login lagi. Data terakhir:{" "}
+              {terhubung.tanggal}. Disinkronkan otomatis tiap jam.
+            </p>
+            <div className="row">
+              <button type="button" className="btn utama" disabled={sibuk} onClick={() => void jalan(() => tarikGarmin(id, hariIni))}>
+                {sibuk ? "Menarik…" : "Tarik sekarang"}
+              </button>
+              <button type="button" className="btn" disabled={sibuk} onClick={() => setGanti(true)}>
+                Ganti akun
               </button>
               <button type="button" className="btn" disabled={sibuk} onClick={() => void putusGarmin(id)}>
                 Putuskan
               </button>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="field">
+              <span>Username Garmin (email)</span>
+              <input type="text" autoComplete="off" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            </label>
+            <label className="field">
+              <span>Password Garmin</span>
+              <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+            <div className="row">
+              <button className="btn utama" disabled={sibuk || !id}>
+                {sibuk ? "Menghubungkan…" : "Masuk & simpan"}
+              </button>
+              {terhubung && (
+                <button type="button" className="btn" onClick={() => setGanti(false)}>
+                  Batal
+                </button>
+              )}
+            </div>
+          </>
+        )}
         {umpan && <Info jenis={umpan.ok ? "info" : "peringatan"}>{umpan.teks}</Info>}
-        {terhubung && <p className="muted kecil">Terhubung ke akun {terhubung.nama}. Lihat hasilnya di Dashboard.</p>}
         <p className="muted kecil">
           Jalur tidak resmi: Garmin tidak menyediakan login username/password untuk umum, sehingga bisa gagal bila akun memakai verifikasi
-          dua langkah atau Garmin mengubah sistem masuknya. Password tidak disimpan; sesi hilang saat server dimatikan.
+          dua langkah atau Garmin mengubah sistem masuknya. Password dipakai sekali untuk masuk dan tidak disimpan; yang disimpan hanya token terenkripsi di database server, sehingga tidak perlu login lagi.
         </p>
       </form>
     </section>
