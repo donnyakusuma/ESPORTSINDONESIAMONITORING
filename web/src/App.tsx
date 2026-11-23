@@ -86,11 +86,11 @@ function Aplikasi({
   // Kelompok yang sudah tidak punya atlet aktif otomatis kembali ke "semua".
   const kelompok = daftarKelompok.includes(pilihan) ? pilihan : "";
   // Daftar nama atlet mengikuti pilihan kelompok; atlet terpilih jatuh ke yang pertama bila tidak ada di daftar.
+  const [versiWhoop, setVersiWhoop] = useState(0);
   const daftarNama = atletAktif.filter((a) => !kelompok || a.kelompok === kelompok);
   const [idAtlet, setIdAtlet] = useState("");
   const atletTerpilih = daftarNama.find((a) => a.id === idAtlet) ?? daftarNama[0];
   const [tarik, setTarik] = useState<{ sibuk: boolean; ok?: boolean; teks?: string }>({ sibuk: false });
-  const [versiWhoop, setVersiWhoop] = useState(0);
   // Pesan sesudah kembali dari halaman login Whoop (?whoop=terhubung|ditolak|gagal|belum-diatur).
   const [hasilWhoop, setHasilWhoop] = useState(() => new URLSearchParams(location.search).get("whoop"));
   useEffect(() => {
@@ -276,7 +276,11 @@ function Aplikasi({
               </div>
             )}
             {halaman.peran === "about" && <HalamanAbout />}
-            {halaman.peran === "dashboard" && <Dashboard namaAtlet={atletTerpilih?.nama ?? null} idAtlet={atletTerpilih?.id ?? null} versi={versiWhoop} />}
+            {halaman.peran === "dashboard" && <Dashboard
+                namaAtlet={atletTerpilih?.nama ?? null}
+                idAtlet={atletTerpilih?.id ?? null}
+                versi={versiWhoop}
+              />}
             {halaman.peran === "atlet" && <HalamanAtlet halaman={halaman.h} pindah={(h) => setHalaman({ peran: "atlet", h })} />}
             {halaman.peran === "staf" && <HalamanStaf halaman={halaman.h} pindah={(h) => setHalaman({ peran: "staf", h })} />}
             {halaman.peran === "manajer" && <HalamanManajer halaman={halaman.h} />}

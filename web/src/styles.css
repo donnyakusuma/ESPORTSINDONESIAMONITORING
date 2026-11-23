@@ -565,3 +565,102 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tab-about { margin-top: auto; align-self: flex-start; margin-left: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600; border: 1px solid var(--field-border); border-radius: 14px; background: transparent; color: var(--sub); cursor: pointer; }
 .tab-about:hover, .tab-about.aktif { background: var(--surface); color: var(--ink); }
 .tab-about + .side-foot { margin-top: 8px; }
+
+/* ───────── Panel WHOOP ───────── */
+.wh { background: #121014; border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 18px; color: #fff; }
+.wh-kepala { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wh-merek { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wh-merek > b { font-size: 20px; letter-spacing: 0.32em; font-weight: 800; }
+.wh-sumber { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: rgba(255,255,255,0.08); color: #cfc9cc; }
+.wh-sumber.whoop { background: rgba(53,208,127,0.14); color: #b9f2d3; }
+.wh-label { color: #a39ca0; font-size: 12px; letter-spacing: 0.02em; }
+.wh-hari { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wh-hari button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 10px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.04); color: #a39ca0; cursor: pointer; font: inherit; }
+.wh-hari button span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+.wh-hari button b { color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; }
+.wh-hari button i { width: 6px; height: 6px; border-radius: 50%; }
+.wh-hari button:hover { background: rgba(255,255,255,0.08); }
+.wh-hari button.aktif { background: #fff; }
+.wh-hari button.aktif b, .wh-hari button.aktif span { color: #121014; }
+.wh-dial-baris { display: flex; justify-content: center; align-items: flex-end; gap: clamp(8px, 4vw, 48px); flex-wrap: wrap; padding-top: 4px; }
+.wh-dial { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; max-width: 220px; }
+.wh-dial svg { max-width: 100%; height: auto; }
+.wh-dial-angka { fill: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wh-dial-busur { transition: stroke-dasharray 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.wh-dial-judul { font-size: 12px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #fff; }
+.wh-dial-judul:empty { display: none; }
+.wh-dial-bawah { font-size: 13px; color: #a39ca0; }
+.wh-status { color: #e6e1e3; }
+.wh-tanggal { text-align: center; color: #a39ca0; font-size: 13px; margin: -6px 0 0; }
+.wh-vital { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 8px; }
+.wh-vital-item { background: rgba(255,255,255,0.04); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.wh-vital-item b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.wh-vital-item b small { font-size: 12px; font-weight: 500; color: #a39ca0; }
+.wh-delta { font-size: 12px; color: #a39ca0; font-variant-numeric: tabular-nums; }
+.wh-delta.baik { color: #b9f2d3; }
+.wh-delta.buruk { color: #ffc0c8; }
+.wh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.wh-grid.dua { grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); }
+.wh-grafik, .wh-kartu { background: rgba(255,255,255,0.04); border-radius: 16px; padding: 14px 16px; min-width: 0; }
+.wh-grafik-kepala { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.wh-grafik-kepala h3 { margin: 0; font-size: 14px; }
+.wh-grafik-badan { position: relative; }
+.wh-grafik-badan svg { width: 100%; height: auto; display: block; overflow: visible; }
+.wh-sumbu { fill: #8a8387; font-size: 9px; font-variant-numeric: tabular-nums; }
+.wh-sumbu.kuat { fill: #fff; font-weight: 700; }
+.wh-nilai-kolom { fill: #e6e1e3; font-size: 9px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wh-kolom { cursor: pointer; transition: opacity 0.15s; }
+.wh-kolom.redup { opacity: 0.45; }
+.wh-kolom-sorot { fill: rgba(255,255,255,0.06); }
+.wh-tip { position: absolute; top: 0; transform: translate(-50%, -100%); background: #fff; color: #121014; border-radius: 10px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 1px; white-space: nowrap; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,0.35); z-index: 2; }
+.wh-legenda { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: #a39ca0; }
+.wh-legenda span { display: inline-flex; align-items: center; gap: 4px; }
+.wh-legenda i, .wh-tahap-legenda i, .wh-zona-legenda i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex: none; }
+.wh-tahap { display: flex; gap: 2px; height: 28px; border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.wh-tahap span { min-width: 2px; }
+.wh-tahap-legenda { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
+.wh-tahap-legenda li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.wh-tahap-legenda li span { flex: 1; color: #cfc9cc; }
+.wh-tahap-legenda b, .wh-tahap-legenda small { font-variant-numeric: tabular-nums; }
+.wh-tahap-legenda small { color: #a39ca0; width: 32px; text-align: right; }
+.wh-butuh { margin-top: 14px; }
+.wh-butuh-teks { display: flex; justify-content: space-between; font-size: 13px; color: #cfc9cc; margin-bottom: 6px; }
+.wh-butuh-teks b { color: #fff; font-variant-numeric: tabular-nums; }
+.wh-butuh-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.wh-butuh-bar span { display: block; height: 100%; border-radius: 4px; background: #8BA7C4; }
+.wh-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.wh-mini > div { display: flex; flex-direction: column; gap: 2px; }
+.wh-mini b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.wh-latihan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.wh-latihan li { display: flex; gap: 12px; align-items: flex-start; }
+.wh-latihan li .wh-dial { flex: none; }
+.wh-latihan-isi { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.wh-latihan-kepala { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.wh-latihan-kepala b { text-transform: capitalize; }
+.wh-latihan-angka { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: #cfc9cc; font-variant-numeric: tabular-nums; }
+.wh-zona { display: flex; gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; }
+.wh-zona-legenda { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; color: #a39ca0; font-variant-numeric: tabular-nums; }
+.wh-zona-legenda span { display: inline-flex; align-items: center; gap: 4px; }
+.wh-kosong { color: #a39ca0; font-size: 13px; margin: 0; }
+.wh-tabel summary { cursor: pointer; color: #a39ca0; font-size: 13px; }
+.wh-tabel table { margin-top: 10px; }
+.wh-ajak { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .wh { padding: 16px; }
+  .wh-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wh-tahap-legenda { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .wh-dial-busur { transition: none; } }
+@media (max-width: 860px) {
+  .app { align-content: start; grid-template-columns: minmax(0, 1fr); }
+  .tab-about { margin-top: 8px; }
+  .top { min-width: 0; }
+  .pilih-atlet { width: 100%; }
+  .pilih-atlet label { flex: 1 1 100%; min-width: 0; }
+  .pilih-atlet select { flex: 1; min-width: 0; max-width: none; }
+  .spanduk-contoh { min-width: 0; overflow-wrap: anywhere; }
+}
+.wh, .wh-grafik, .wh-kartu { min-width: 0; }
+.wh-bb { position: relative; height: 12px; border-radius: 6px; background: rgba(255,255,255,0.08); margin: 6px 0 4px; }
+.wh-bb span { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: #2BB5A0; }
+.wh-bb-sumbu { display: flex; justify-content: space-between; font-size: 11px; color: #8a8387; }
