@@ -2,7 +2,7 @@ import { KAMUS, VERSI_KAMUS } from "../lib/harmonizer.mjs";
 import { AlamatSalin } from "./integrasi.js";
 
 /** Alamat publik (GitHub Pages, https) yang didaftarkan di WHOOP Developer Dashboard. */
-export const URL_PUBLIK = "https://donnyakusuma.github.io/esportsindonesiamonitoring/";
+export const URL_PUBLIK = "https://donnyakusuma.github.io/ESPORTSINDONESIAMONITORING/";
 export const URL_PRIVACY = `${URL_PUBLIK}privacy.html`;
 export const URL_REDIRECT_WHOOP = `${URL_PUBLIK}whoop-callback.html`;
 
