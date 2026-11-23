@@ -261,7 +261,7 @@ function Aplikasi({
                 <span>
                   {
                     {
-                      terhubung: "Whoop berhasil terhubung. Data 30 hari terakhir sedang ditarik dan akan tersinkron otomatis setiap jam.",
+                      terhubung: "Whoop berhasil terhubung. Data 1 tahun terakhir sedang ditarik dan akan tersinkron otomatis setiap jam.",
                       ditolak: "Akses Whoop tidak disetujui. Coba hubungkan lagi dari Integrasi Device > Whoop.",
                       gagal: "Whoop gagal terhubung. Periksa Client ID/Secret dan Redirect URI, lalu coba lagi.",
                       "belum-diatur": "Whoop belum diatur. Isi Client ID dan Client Secret di Integrasi Device > Whoop.",

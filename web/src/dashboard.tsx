@@ -27,8 +27,15 @@ export function Dashboard(props: { namaAtlet: string | null; idAtlet: string | n
 
   // Semua sumber diseragamkan lewat harmonizer (kamus, satuan, dan aturan tanggal yang sama).
   const hasil = useMemo(() => {
-    const baris = live ? { baris: live.data, tanggal: live.tanggal } : namaAtlet && barisCsvAtlet(namaAtlet) ? { baris: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN } : null;
-    return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin: baris });
+    // Garmin: riwayat harian dari database server (sampai 1 tahun) + data terakhir; bila belum ada, ekspor CSV.
+    const garmin: { baris: Record<string, string>; tanggal: string }[] = [];
+    if (live) {
+      for (const [tanggal, baris] of Object.entries(live.riwayat ?? {})) garmin.push({ baris, tanggal });
+      if (!live.riwayat?.[live.tanggal]) garmin.push({ baris: live.data, tanggal: live.tanggal });
+    } else if (namaAtlet && barisCsvAtlet(namaAtlet)) {
+      garmin.push({ baris: barisCsvAtlet(namaAtlet)!, tanggal: TANGGAL_GARMIN });
+    }
+    return susunAtlet({ athleteId: idAtlet ?? "-", whoop: wh.rekaman, garmin });
   }, [idAtlet, namaAtlet, live, wh.rekaman]);
 
   return (

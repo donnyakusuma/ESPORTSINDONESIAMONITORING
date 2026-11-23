@@ -30,7 +30,7 @@ export const whoop = {
     }),
   status: (a: string) => ambilJson<StatusWhoop>(`/api/athletes/${id(a)}/status`),
   ringkasan: (a: string, hari = 7) => ambilJson<RingkasanWhoop>(`/api/athletes/${id(a)}/summary?days=${hari}`),
-  sinkron: (a: string, hari = 7) => ambilJson<unknown>(`/api/athletes/${id(a)}/sync?days=${hari}`, { method: "POST" }),
+  sinkron: (a: string, hari = 365) => ambilJson<unknown>(`/api/athletes/${id(a)}/sync?days=${hari}`, { method: "POST" }),
   putus: (a: string) => ambilJson<unknown>(`/whoop/disconnect/${id(a)}`, { method: "DELETE" }),
   urlHubungkan: (a: string) => `/whoop/connect?athleteId=${id(a)}`,
 };
@@ -90,7 +90,7 @@ export function useWhoopRekaman(athleteId: string | null, versi = 0) {
     const muat = async () => {
       try {
         const status = await whoop.status(athleteId);
-        const rekaman = status.connected ? await ambilJson<RekamanWhoop[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=42&limit=1000`) : cadangan(athleteId);
+        const rekaman = status.connected ? await ambilJson<RekamanWhoop[]>(`/api/athletes/${encodeURIComponent(athleteId)}/records?days=400&limit=5000`) : cadangan(athleteId);
         if (!batal) setHasil({ status, rekaman, memuat: false });
       } catch {
         // Server Whoop tidak aktif (mis. di komputer lain): pakai snapshot agar tampilan sama.

@@ -473,7 +473,7 @@ export function HalamanIntegrasiDevice() {
 /**
  * Whoop lewat server lokal whoop-esport (OAuth 2.0 resmi, port 3201, dialihkan oleh proxy Vite).
  * Langkah 1 mengisi Client ID/Secret dari Whoop Developer Dashboard; langkah 2 menghubungkan akun atlet.
- * Setelah terhubung, server menarik 30 hari ke belakang lalu menyinkronkan otomatis setiap jam.
+ * Setelah terhubung, server menarik 1 tahun ke belakang lalu menyinkronkan otomatis setiap jam.
  */
 function TabWhoop() {
   const { svc, actor } = useApp();
@@ -550,7 +550,7 @@ function TabWhoop() {
             )}
             {status?.connected && (
               <>
-                <button className="btn utama" disabled={sibuk} onClick={() => void aksi(() => whoop.sinkron(id, 7), "Data Whoop 7 hari terakhir ditarik.")}>
+                <button className="btn utama" disabled={sibuk} onClick={() => void aksi(() => whoop.sinkron(id, 365), "Data Whoop 1 tahun terakhir ditarik.")}>
                   {sibuk ? "Menarik…" : "Tarik sekarang"}
                 </button>
                 <button className="btn" disabled={sibuk} onClick={() => void aksi(() => whoop.putus(id), "Koneksi Whoop diputus.")}>

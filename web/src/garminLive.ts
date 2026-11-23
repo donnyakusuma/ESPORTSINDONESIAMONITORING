@@ -6,6 +6,8 @@ interface Entri {
   nama: string;
   tanggal: string;
   data: Baris;
+  /** Riwayat harian dari database server (tanggal -> data), sampai 1 tahun. */
+  riwayat?: Record<string, Baris>;
 }
 let simpan: Record<string, Entri> = {};
 const pendengar = new Set<() => void>();
@@ -34,9 +36,9 @@ async function panggil(url: string, init?: RequestInit): Promise<{ ok: boolean; 
 export async function muatGarminTersimpan() {
   const r = await panggil("/api/garmin/saved");
   if (!r.ok) return;
-  const daftar = r.atlet as { atletId: string; nama: string; terakhir: { tanggal: string; data: Baris } | null }[];
+  const daftar = r.atlet as { atletId: string; nama: string; terakhir: { tanggal: string; data: Baris } | null; riwayat?: Record<string, Baris> }[];
   const baru = { ...simpan };
-  for (const a of daftar) if (a.terakhir) baru[a.atletId] = { nama: a.nama, tanggal: a.terakhir.tanggal, data: a.terakhir.data };
+  for (const a of daftar) if (a.terakhir) baru[a.atletId] = { nama: a.nama, tanggal: a.terakhir.tanggal, data: a.terakhir.data, riwayat: a.riwayat ?? {} };
   ubah(baru);
 }
 

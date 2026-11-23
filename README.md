@@ -39,7 +39,7 @@ npm run dev
 
 Lalu buka **Integrasi Device > Whoop** di aplikasi dan ikuti panduannya (Client ID/Secret dari developer-dashboard.whoop.com).
 Akun yang terhubung di satu komputer tidak otomatis terhubung di komputer lain, karena token disimpan lokal.
-Untuk menyegarkan snapshot: ambil `/api/athletes/<id>/records?days=90&limit=2000` dari server Whoop lalu simpan ke berkas snapshot.
+Untuk menyegarkan snapshot: ambil `/api/athletes/<id>/records?days=400&limit=5000` dari server Whoop lalu simpan ke berkas snapshot.
 
 ## Prototipe UI web
 

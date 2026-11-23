@@ -94,9 +94,9 @@ app.get('/whoop/callback', async (req, res) => {
     const profile = await whoop.fetchProfileWithToken(tokens.accessToken);
     store.saveConnection(ctx.athleteId, { whoopUserId: profile.user_id, scope: tokens.scope, tokens });
     if (process.env.BACKFILL_ON_CONNECT !== 'false') {
-      sync.syncAthlete(ctx.athleteId, 30).catch((e) => console.error('backfill gagal:', e.message));
+      sync.syncAthlete(ctx.athleteId, 365).catch((e) => console.error('backfill gagal:', e.message));
     }
-    res.redirect(`${APP_URL}/?whoop=terhubung`);
+    res.redirect(`${APP_URL}/?whoop=terhubung`); // data 365 hari ditarik di latar belakang
   } catch (err) {
     console.error('Callback gagal:', err.message, err.body ?? '');
     res.redirect(`${APP_URL}/?whoop=gagal`);

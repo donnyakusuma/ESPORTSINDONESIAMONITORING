@@ -54,8 +54,7 @@ export function HalamanAbout() {
         <div className="setelan-ket">
           <h2>3. Indeks Esports (v{VERSI_INDEKS})</h2>
           <p>
-            Dua indeks gabungan khusus esports. <b>Usulan, belum divalidasi untuk esports</b>: bobot dan ambang adalah titik awal. Indeks ini
-            penanda kesiapan relatif terhadap diri sendiri, bukan ukuran kognisi.
+            Dua indeks gabungan khusus esports. Indeks ini penanda kesiapan relatif terhadap diri sendiri, bukan ukuran kognisi.
           </p>
         </div>
         <div className="card stack">

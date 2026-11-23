@@ -151,22 +151,38 @@ export interface HasilSusun {
 export function susunAtlet(masukan: {
   athleteId: string;
   whoop: Rekaman[];
-  garmin: { baris: Baris; tanggal: string } | null;
+  /** Riwayat harian Garmin (boleh bolong): satu baris per tanggal. */
+  garmin: { baris: Baris; tanggal: string }[];
 }): HasilSusun {
   const per = (t: string) => masukan.whoop.filter((r) => r.type === t);
   const adaWhoop = masukan.whoop.length > 0;
-  const g = masukan.garmin;
-  if (!adaWhoop && !g) return { hari: [], ibms: [], ibms7: [], peringatan: [] };
+  const gs = masukan.garmin;
+  if (!adaWhoop && gs.length === 0) return { hari: [], ibms: [], ibms7: [], peringatan: [] };
+
+  // Semua hari Garmin digabung menjadi satu kumpulan summary, lalu diseragamkan bersama WHOOP.
+  const garmin = gs.length
+    ? gs.reduce(
+        (acc, g) => {
+          const x = garminKeSummary(g.baris, g.tanggal);
+          acc.sleeps.push(...x.sleeps);
+          acc.hrv.push(...x.hrv);
+          acc.dailies.push(...x.dailies);
+          acc.stress.push(...x.stress);
+          return acc;
+        },
+        { sleeps: [] as unknown[], hrv: [] as unknown[], dailies: [] as unknown[], stress: [] as unknown[] },
+      )
+    : null;
 
   const hasil = harmonisasi({
     athlete_id: masukan.athleteId,
     whoop: adaWhoop ? { sleeps: per("sleep"), recoveries: per("recovery"), cycles: per("cycle"), workouts: per("workout") } : null,
-    garmin: g ? garminKeSummary(g.baris, g.tanggal) : null,
+    garmin,
   });
 
   // Energi Total Harian Garmin: kamus meminta active + BMR. Ekspor Health Stats hanya punya "Total Calories"
   // (sudah termasuk BMR menurut Garmin Connect), jadi diisi dari sana dengan catatan asalnya.
-  if (g) {
+  for (const g of gs) {
     const tot = n(g.baris["Total Calories (kcal)"]);
     const c = hasil.catatan.find((x) => x.sumber === "garmin" && x.tanggal === g.tanggal);
     if (c && tot !== null && (c.metrik.EKT?.nilai ?? null) === null) {
@@ -188,19 +204,21 @@ export function susunAtlet(masukan: {
     if (adaMetrik) h.catatan[c.sumber] = c;
     h.aktivitas.push(...c.aktivitas);
   }
-  if (g) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
+  for (const g of gs) ambil(g.tanggal).rinciGarmin = rinciGarmin(g.baris);
   for (const k of indeks.ikb) {
     const h = peta.get(k.tanggal);
     if (h && (!h.ikb || (h.ikb.status !== "ok" && k.status === "ok"))) h.ikb = k;
   }
 
-  // 7 hari kalender berturut-turut sampai hari data terakhir; hari kosong tetap tampil.
+  // Semua hari kalender dari data pertama sampai data terakhir (maks. ~1 tahun); hari bolong tetap ada (kosong).
   const berdata = [...peta.values()].filter(adaData).map((h) => h.tanggal).sort();
   const akhir = berdata[berdata.length - 1];
-  if (!akhir) return { hari: [], ibms: [], ibms7: [], peringatan: hasil.peringatan };
-  const hari = Array.from({ length: 7 }, (_, k) => {
+  const awal = berdata[0];
+  if (!akhir || !awal) return { hari: [], ibms: [], ibms7: [], peringatan: hasil.peringatan };
+  const jumlah = Math.min(400, Math.round((Date.parse(`${akhir}T00:00:00Z`) - Date.parse(`${awal}T00:00:00Z`)) / 86400000) + 1);
+  const hari = Array.from({ length: Math.max(jumlah, 1) }, (_, k) => {
     const d = new Date(`${akhir}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - (6 - k));
+    d.setUTCDate(d.getUTCDate() - (jumlah - 1 - k));
     const t = d.toISOString().slice(0, 10);
     return peta.get(t) ?? { tanggal: t, catatan: {}, ikb: null, aktivitas: [], rinciGarmin: null };
   });

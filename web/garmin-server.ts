@@ -28,6 +28,8 @@ interface Tersimpan {
   tokensEnc: string;
   terhubungAt: string;
   terakhir?: { tanggal: string; diambilAt: string; data: Record<string, string> };
+  /** Riwayat harian (tanggal -> data), diisi mundur sampai 365 hari. */
+  riwayat?: Record<string, Record<string, string>>;
 }
 type Db = { atlet: Record<string, Tersimpan> };
 
@@ -146,7 +148,8 @@ async function tarik(id: string, tanggal: string): Promise<Record<string, string
   const s = sesi.get(id);
   if (rec && s) {
     rec.tokensEnc = enkripsi(s.gc.exportToken());
-    rec.terakhir = { tanggal, diambilAt: new Date().toISOString(), data };
+    if (!rec.terakhir || tanggal >= rec.terakhir.tanggal) rec.terakhir = { tanggal, diambilAt: new Date().toISOString(), data };
+    (rec.riwayat ??= {})[tanggal] = data;
     simpanDb(db);
   }
   return data;
@@ -167,6 +170,34 @@ function pulihkanSesi() {
   }
 }
 
+// ───────── Isi mundur 1 tahun: satu hari per ~1,5 detik agar tidak membebani Garmin ─────────
+const HARI_RIWAYAT = 365;
+const sedangIsi = new Set<string>();
+const sudahDicoba = new Map<string, Set<string>>(); // hari tanpa data tidak dicoba ulang sampai server restart
+
+async function isiMundur(id: string) {
+  if (sedangIsi.has(id)) return;
+  sedangIsi.add(id);
+  try {
+    const dicoba = sudahDicoba.get(id) ?? new Set<string>();
+    sudahDicoba.set(id, dicoba);
+    for (let k = 1; k <= HARI_RIWAYAT; k++) {
+      if (!sesi.has(id)) return; // diputus di tengah jalan
+      const t = new Date(Date.now() + 7 * 3600_000 - k * 86400_000).toISOString().slice(0, 10);
+      if (muatDb().atlet[id]?.riwayat?.[t] || dicoba.has(t)) continue;
+      dicoba.add(t);
+      try {
+        await tarik(id, t);
+      } catch {
+        // hari tanpa data (jam tidak dipakai) dibiarkan bolong
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  } finally {
+    sedangIsi.delete(id);
+  }
+}
+
 async function sinkronSemua() {
   for (const id of [...sesi.keys()]) {
     try {
@@ -174,6 +205,7 @@ async function sinkronSemua() {
     } catch (e) {
       console.error(`[garmin] sinkron ${id} gagal:`, e instanceof Error ? e.message : e);
     }
+    void isiMundur(id);
   }
 }
 
@@ -206,6 +238,7 @@ export function garminServer(): Plugin {
             const db = muatDb();
             db.atlet[atletId] = { nama, displayName: profil.displayName, tokensEnc: enkripsi(gc.exportToken()), terhubungAt: new Date().toISOString() };
             simpanDb(db);
+            void isiMundur(atletId); // riwayat 1 tahun ditarik di latar belakang
             return kirim(200, { ok: true, nama });
           }
           if (req.method === "GET" && url.pathname === "/stats") {
@@ -220,7 +253,7 @@ export function garminServer(): Plugin {
             const db = muatDb();
             return kirim(200, {
               ok: true,
-              atlet: Object.entries(db.atlet).map(([atletId, r]) => ({ atletId, nama: r.nama, terhubungAt: r.terhubungAt, terakhir: r.terakhir ?? null, aktif: sesi.has(atletId) })),
+              atlet: Object.entries(db.atlet).map(([atletId, r]) => ({ atletId, nama: r.nama, terhubungAt: r.terhubungAt, terakhir: r.terakhir ?? null, riwayat: r.riwayat ?? {}, mengisi: sedangIsi.has(atletId), aktif: sesi.has(atletId) })),
             });
           }
           if (req.method === "POST" && url.pathname === "/logout") {

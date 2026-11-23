@@ -76,6 +76,124 @@ const rata = (xs: (number | null | undefined)[]) => {
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 };
 
+const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const fmtTanggalPanjang = (t: string) =>
+  new Date(`${t}T12:00:00Z`).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+function fmtRentang(a: string, b: string) {
+  const x = new Date(`${a}T12:00:00Z`), y = new Date(`${b}T12:00:00Z`);
+  return `${x.getUTCDate()} ${BULAN[x.getUTCMonth()]}${x.getUTCFullYear() !== y.getUTCFullYear() ? ` ${x.getUTCFullYear()}` : ""} – ${y.getUTCDate()} ${BULAN[y.getUTCMonth()]} ${y.getUTCFullYear()}`;
+}
+
+/**
+ * Tren IKB satu tahun: satu titik per hari yang terhitung (hari bolong dibiarkan kosong).
+ * Garis acuan di 50 (kebiasaan atlet sendiri) dan ambang pita. Klik titik untuk membuka minggu itu.
+ */
+function TrenTahun({ semua, pilihTanggal, lompatKe }: { semua: HariTampil[]; pilihTanggal: string; lompatKe(t: string): void }) {
+  const [sorot, setSorot] = useState<number | null>(null);
+  const L = 960,
+    T = 190,
+    atas = 14,
+    bawah = 26,
+    kiri = 30,
+    kanan = 8;
+  const tinggi = T - atas - bawah;
+  const n = semua.length;
+  const x = (k: number) => kiri + (n <= 1 ? 0 : (k / (n - 1)) * (L - kiri - kanan));
+  const y = (v: number) => atas + tinggi - (Math.max(0, Math.min(100, v)) / 100) * tinggi;
+  const titik = semua.map((h, k) => ({ k, h, v: h.ikb?.status === "ok" ? h.ikb.nilai : null })).filter((t): t is { k: number; h: HariTampil; v: number } => t.v !== null);
+  // Garis hanya menyambung hari berurutan; bolong > 1 hari memutus garis.
+  const ruas: string[] = [];
+  let jalur = "";
+  titik.forEach((t, j) => {
+    const sambung = j > 0 && t.k - titik[j - 1]!.k <= 2;
+    jalur += `${sambung ? "L" : (jalur ? " M" : "M")}${x(t.k).toFixed(1)},${y(t.v).toFixed(1)}`;
+    if (!titik[j + 1] || titik[j + 1]!.k - t.k > 2) {
+      ruas.push(jalur);
+      jalur = "";
+    }
+  });
+  // Label bulan di tanggal 1; label awal dibuang bila terlalu dekat dengan label bulan berikutnya.
+  const bulanAwal = semua
+    .map((h, k) => ({ h, k }))
+    .filter(({ h }, k) => k === 0 || h.tanggal.endsWith("-01"))
+    .filter(({ k }, j, arr) => !(j === 0 && arr[1] && x(arr[1].k) - x(k) < 48));
+  const idxPilih = semua.findIndex((h) => h.tanggal === pilihTanggal);
+  const s = sorot !== null ? titik.find((t) => t.k === sorot) : null;
+  const rataIkb = titik.length ? titik.reduce((a, t) => a + t.v, 0) / titik.length : null;
+
+  return (
+    <div className="wh-grafik">
+      <div className="wh-grafik-kepala">
+        <h3>Kesiapan Bermain (IKB) 1 tahun</h3>
+        <span className="wh-legenda">
+          <span>
+            <i style={{ background: WARNA.hijau }} />
+            Normal ≥{PARAM_IND.PITA_NORMAL}
+          </span>
+          <span>
+            <i style={{ background: WARNA.kuning }} />
+            Perhatian ≥{PARAM_IND.PITA_PERHATIAN}
+          </span>
+          <span>
+            <i style={{ background: WARNA.merah }} />
+            Rendah
+          </span>
+          <span>
+            {titik.length} hari terhitung{rataIkb !== null ? ` · rata-rata ${angka(rataIkb, 1)}` : ""}
+          </span>
+        </span>
+      </div>
+      <div className="wh-grafik-badan">
+        <svg viewBox={`0 0 ${L} ${T}`} role="img" aria-label={`Tren IKB ${titik.length} hari terhitung dalam ${n} hari`} onMouseLeave={() => setSorot(null)}>
+          {[0, PARAM_IND.PITA_PERHATIAN, PARAM_IND.PITA_NORMAL, 50, 100].map((t) => (
+            <g key={t}>
+              <line x1={kiri} x2={L - kanan} y1={y(t)} y2={y(t)} stroke={t === 50 ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.07)"} strokeWidth="1" />
+              {(t === 0 || t === 50 || t === 100) && (
+                <text x={kiri - 6} y={y(t)} textAnchor="end" dominantBaseline="central" className="wh-sumbu">
+                  {t}
+                </text>
+              )}
+            </g>
+          ))}
+          {bulanAwal.map(({ h, k }) => (
+            <text key={h.tanggal} x={x(k)} y={T - 8} textAnchor="start" className="wh-sumbu">
+              {BULAN[Number(h.tanggal.slice(5, 7)) - 1]}
+              {h.tanggal.slice(5, 7) === "01" || k === 0 ? ` ${h.tanggal.slice(2, 4)}` : ""}
+            </text>
+          ))}
+          {idxPilih >= 0 && <rect x={x(Math.max(0, idxPilih - 6))} y={atas - 4} width={Math.max(4, x(idxPilih) - x(Math.max(0, idxPilih - 6)))} height={tinggi + 8} rx="3" className="wh-kolom-sorot" />}
+          {ruas.map((d, j) => (
+            <path key={j} d={d} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeLinejoin="round" />
+          ))}
+          {titik.map((t) => (
+            <circle
+              key={t.k}
+              cx={x(t.k)}
+              cy={y(t.v)}
+              r={sorot === t.k ? 5 : 3}
+              fill={PITA_IKB[t.h.ikb?.pita ?? "normal"]!.warna}
+              stroke="#121014"
+              strokeWidth="1.5"
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => setSorot(t.k)}
+              onClick={() => lompatKe(t.h.tanggal)}
+            />
+          ))}
+        </svg>
+        {s && (
+          <div className="wh-tip" style={{ left: `${(x(s.k) / L) * 100}%`, top: `${(y(s.v) / T) * 100}%` }} role="tooltip">
+            <b>{fmtTanggalPanjang(s.h.tanggal)}</b>
+            <span>
+              IKB {angka(s.v, 1)} · {PITA_IKB[s.h.ikb?.pita ?? "normal"]!.label}
+            </span>
+            <span>klik untuk membuka minggu ini</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Label istilah kamus. Tooltip hanya memuat nama, kode, satuan, dan pengingat ke Kamus di About (tanpa nama perangkat). */
 function Istilah({ kode, children }: { kode: string; children?: ReactNode }) {
   const k = KAMUS_PER_KODE.get(kode);
@@ -275,11 +393,26 @@ const VITAL: { kode: string; d: number; naikBaik: boolean | null }[] = [
 ];
 
 export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
+  // Data setahun penuh (hari bolong tetap ada). Layar menampilkan jendela 7 hari yang bisa digeser.
+  const semua = hasil.hari;
+  const berdata = semua.filter(adaData);
+  const [akhir, setAkhir] = useState(semua.length - 1);
+  const ujung = Math.min(akhir, semua.length - 1);
   // Satu-satunya hari berdata tampil sendiri, tanpa 6 hari kosong.
-  const berdata = hasil.hari.filter(adaData);
-  const hari = berdata.length > 1 ? hasil.hari : berdata;
+  const hari = berdata.length > 1 ? semua.slice(Math.max(0, ujung - 6), ujung + 1) : berdata;
   const [pilih, setPilih] = useState(hari.length - 1);
   const i = Math.min(pilih, hari.length - 1);
+  /** Geser jendela agar `tanggal` menjadi hari terakhir yang tampil, lalu pilih hari itu. */
+  const lompatKe = (tanggal: string) => {
+    const idx = semua.findIndex((x) => x.tanggal === tanggal);
+    if (idx < 0) return;
+    setAkhir(Math.max(idx, Math.min(6, semua.length - 1)));
+    setPilih(Math.min(idx, 6));
+  };
+  const geser = (langkah: number) => {
+    setAkhir((a) => Math.max(Math.min(6, semua.length - 1), Math.min(semua.length - 1, Math.min(a, semua.length - 1) + langkah)));
+    setPilih(6);
+  };
   const h = hari[i];
   if (!h) return null;
   const lain = hari.filter((_, k) => k !== i);
@@ -308,6 +441,9 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
   const maksTidurJam = Math.max(10, Math.ceil(Math.max(...hari.map((x) => TAHAP.reduce((a, g) => a + (nilai(x, g.kode)?.nilai ?? 0), 0) / 60))));
 
   const ikb = h.ikb;
+  // IKB terakhir yang bisa dihitung sampai hari terpilih (untuk hari yang datanya belum cukup).
+  const idxGlobal = semua.findIndex((x) => x.tanggal === h.tanggal);
+  const ikbTerakhir = [...semua.slice(0, idxGlobal + 1)].reverse().find((x) => x.ikb?.status === "ok" && x.ikb.nilai !== null) ?? null;
   const ibms7 = hasil.ibms7[0] ?? null;
 
   return (
@@ -340,6 +476,27 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
           </div>
         )}
       </header>
+
+      {banyakHari && (
+        <div className="wh-nav-minggu">
+          <button className="btn kecil" onClick={() => geser(-7)} disabled={ujung <= 6}>
+            ‹ 7 hari sebelumnya
+          </button>
+          <span className="wh-label">
+            {fmtRentang(hari[0]!.tanggal, hari[hari.length - 1]!.tanggal)} · data {berdata.length} hari dalam {semua.length} hari
+          </span>
+          <span className="row">
+            <button className="btn kecil" onClick={() => geser(7)} disabled={ujung >= semua.length - 1}>
+              7 hari berikutnya ›
+            </button>
+            {ujung < semua.length - 1 && (
+              <button className="btn kecil" onClick={() => lompatKe(semua[semua.length - 1]!.tanggal)}>
+                Terbaru
+              </button>
+            )}
+          </span>
+        </div>
+      )}
 
       {banyakHari && (
         <nav className="wh-hari" aria-label="Pilih hari" style={{ gridTemplateColumns: `repeat(${hari.length}, minmax(0, 1fr))` }}>
@@ -401,7 +558,6 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
         <div className="wh-kartu">
           <div className="wh-grafik-kepala">
             <h3>Indeks Kesiapan Bermain (IKB)</h3>
-            <span className="wh-label">usulan · belum divalidasi untuk esports</span>
           </div>
           {ikb && ikb.status === "ok" && ikb.nilai !== null ? (
             <>
@@ -450,10 +606,28 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
               </p>
             </>
           ) : (
-            <p className="wh-kosong">
-              Belum cukup data: IKB butuh minimal {PARAM_IND.MIN_KOMP_IKB} komponen yang punya basis ≥{PARAM_IND.MIN_BASIS} hari dari {PARAM_IND.JENDELA_BASIS} hari terakhir
-              {ikb ? ` (tersedia ${ikb.n_komponen}).` : "."}
-            </p>
+            <div className="stack" style={{ gap: 8 }}>
+              <p className="wh-kosong">
+                Hari ini belum bisa dihitung: IKB butuh minimal {PARAM_IND.MIN_KOMP_IKB} komponen yang punya basis ≥{PARAM_IND.MIN_BASIS} hari dari{" "}
+                {PARAM_IND.JENDELA_BASIS} hari sebelumnya{ikb ? ` (tersedia ${ikb.n_komponen})` : ""}.
+              </p>
+              {ikbTerakhir?.ikb && (
+                <div className="wh-ikb-atas">
+                  <b className="wh-ikb-angka" style={{ color: PITA_IKB[ikbTerakhir.ikb.pita ?? "normal"]!.warna }}>
+                    {angka(ikbTerakhir.ikb.nilai!, 1)}
+                  </b>
+                  <span>
+                    <b>IKB terakhir terhitung</b> · {PITA_IKB[ikbTerakhir.ikb.pita ?? "normal"]!.label}
+                    <br />
+                    <small className="wh-label">{fmtTanggalPanjang(ikbTerakhir.tanggal)}</small>
+                    <br />
+                    <button className="btn kecil" onClick={() => lompatKe(ikbTerakhir.tanggal)}>
+                      Lihat hari itu
+                    </button>
+                  </span>
+                </div>
+              )}
+            </div>
           )}
           <details className="wh-cara">
             <summary>Cara menghitung IKB</summary>
@@ -521,6 +695,10 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
           </details>
         </div>
       </div>
+
+      {berdata.length > 1 && semua.some((x) => x.ikb?.status === "ok") && (
+        <TrenTahun semua={semua} pilihTanggal={h.tanggal} lompatKe={lompatKe} />
+      )}
 
       <div className="wh-vital">
         {VITAL.map((v) => {
