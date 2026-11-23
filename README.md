@@ -14,8 +14,8 @@ npm run dev       # prototipe UI web di http://localhost:5173
 ## Menjalankan di komputer lain
 
 ```bash
-git clone https://github.com/donnyakusuma/esportsindonesiamonitoring.git
-cd esportsindonesiamonitoring
+git clone https://github.com/donnyakusuma/ESPORTSINDONESIAMONITORING.git
+cd ESPORTSINDONESIAMONITORING
 npm install
 npm run dev        # http://localhost:5173
 ```
