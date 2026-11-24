@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GarminConnect } from "garmin-connect";
 import type { Plugin } from "vite";
+import { jadwalkanSimpanData } from "../scripts/simpan-data-otomatis.mjs";
 
 /**
  * Jembatan lokal ke Garmin Connect (tidak resmi) dengan database server.
@@ -64,6 +65,7 @@ function simpanDb(db: Db) {
   const tmp = DB_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(db), { mode: 0o600 });
   fs.renameSync(tmp, DB_FILE);
+  jadwalkanSimpanData(); // commit + push otomatis, ditunda dan digabung
 }
 
 function baca(req: IncomingMessage): Promise<Record<string, string>> {

@@ -25,7 +25,7 @@ Cukup itu. Dashboard langsung menampilkan data yang sama: ekspor Garmin dan **sn
 bila server Whoop lokal tidak aktif.
 
 Database akun dan data WHOOP/Garmin ikut di repo, di folder `data/` (`data/whoop`, `data/garmin`, `data/garmin-resmi`).
-Setelah atlet login atau sinkron, jalankan `npm run simpan-data` untuk commit dan push-nya. Token tersimpan terenkripsi.
+Setelah atlet login, server otomatis commit dan push `data/` (ditunda 60 detik; matikan dengan `SIMPAN_DATA_OTOMATIS=false`). `npm run simpan-data` tetap bisa dijalankan manual. Token tersimpan terenkripsi.
 Yang **tidak** ikut di repo: `.env` dan file kunci enkripsi (`data/**/.kunci`, atau `TOKEN_ENC_KEY`/`GARMIN_ENC_KEY`).
 Salin kunci itu manual ke komputer lain, kalau tidak token tidak bisa dibaca di sana.
 

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { jadwalkanSimpanData } from '../../../scripts/simpan-data-otomatis.mjs';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../data/garmin-resmi');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
@@ -63,6 +64,7 @@ export function saveConnection(athleteId, { garminUserId, permissions, tokens })
     tokensEnc: encrypt(tokens),
   };
   save(db);
+  jadwalkanSimpanData();
 }
 
 export function getConnection(athleteId) {
