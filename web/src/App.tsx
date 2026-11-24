@@ -178,6 +178,7 @@ function Aplikasi({ demo }: { demo: ReturnType<typeof buatDemo> }) {
         <div className="main">
           <header className="top">
             <span className="tanggal">{fmtTanggal(ctx.hariIni)}</span>
+            {halaman.peran === "dashboard" && (
             <div className="pilih-atlet">
               <label>
                 <span>Number of event</span>
@@ -216,6 +217,7 @@ function Aplikasi({ demo }: { demo: ReturnType<typeof buatDemo> }) {
                 </span>
               )}
             </div>
+            )}
           </header>
           <main className="konten" key={actor.userId}>
             {hasilWhoop && (
