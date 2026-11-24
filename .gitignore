@@ -3,8 +3,9 @@ dist/
 *.log
 .DS_Store
 dist-web/
-# Rahasia dan data lokal server integrasi: JANGAN di-commit
+# Rahasia server integrasi: JANGAN di-commit (kunci enkripsi dan kredensial aplikasi)
 .env
-servers/*/data/
 servers/*/node_modules/
-/data/
+data/**/.kunci
+data/**/*.tmp
+# Database WHOOP dan Garmin (data/whoop, data/garmin) SENGAJA ikut di repo atas keputusan pemilik.

@@ -38,32 +38,13 @@ function halamanAwal(): Halaman {
   return { peran: "dashboard" };
 }
 
-const KUNCI_CONTOH = "readiness-data-contoh";
-
-/** Data contoh aktif kecuali pengguna mematikannya (disimpan di browser ini). */
-function modeContoh(): boolean {
-  return localStorage.getItem(KUNCI_CONTOH) !== "0";
-}
-
-function gantiModeContoh(nyala: boolean) {
-  localStorage.setItem(KUNCI_CONTOH, nyala ? "1" : "0");
-  location.reload();
-}
-
 export function App() {
   // Data demo dibuat sekali per muat halaman. Tidak ada login: langsung masuk sebagai admin.
-  const contoh = useMemo(modeContoh, []);
-  const demo = useMemo(() => buatDemo({ contoh }), [contoh]);
-  return <Aplikasi demo={demo} contoh={contoh} />;
+  const demo = useMemo(() => buatDemo({ contoh: false }), []);
+  return <Aplikasi demo={demo} />;
 }
 
-function Aplikasi({
-  demo,
-  contoh,
-}: {
-  demo: ReturnType<typeof buatDemo>;
-  contoh: boolean;
-}) {
+function Aplikasi({ demo }: { demo: ReturnType<typeof buatDemo> }) {
   const [versi, setVersi] = useState(0);
   const persona = demo.daftarPersona();
   // Tanpa pilihan "Masuk sebagai": aplikasi berjalan sebagai Super admin. ?sebagai=<userId> masih bisa dipakai untuk pengujian.
@@ -151,7 +132,7 @@ function Aplikasi({
             <Logo ukuran={44} />
             <div>
               <b>Esports Indonesia</b>
-              <span>Prototipe · Tahap 1</span>
+              <span>Prototipe · Tahap 2</span>
             </div>
           </div>
           <nav className="nav">
@@ -192,25 +173,6 @@ function Aplikasi({
           <button className={`tab-about ${halaman.peran === "about" ? "aktif" : ""}`} onClick={() => setHalaman({ peran: "about" })}>
             About
           </button>
-          <div className="side-foot">
-            <div className="row spread saklar-contoh">
-              <span>
-                <b>Data contoh</b>
-                <span>{contoh ? "Aktif" : "Mati"}</span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={contoh}
-                aria-label="Tampilkan data contoh"
-                className={`saklar ${contoh ? "nyala" : ""}`}
-                onClick={() => gantiModeContoh(!contoh)}
-              >
-                <span />
-              </button>
-            </div>
-            Prototipe: data disimpan di memori browser dan kembali ke awal saat halaman dimuat ulang.
-          </div>
         </aside>
 
         <div className="main">

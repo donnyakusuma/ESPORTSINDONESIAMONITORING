@@ -4,8 +4,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../data/garmin-resmi');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.ndjson');
 fs.mkdirSync(DATA_DIR, { recursive: true });

@@ -10,7 +10,7 @@ import type { Plugin } from "vite";
  * Jembatan lokal ke Garmin Connect (tidak resmi) dengan database server.
  *
  * Login memakai username dan password SEKALI. Yang disimpan hanya token OAuth (terenkripsi AES-256-GCM)
- * bersama data terakhir tiap atlet, di folder data/garmin/ (di-ignore Git). Password TIDAK pernah disimpan.
+ * bersama data terakhir tiap atlet, di folder data/garmin/ (ikut di repo; hanya file .kunci yang di-ignore). Password TIDAK pernah disimpan.
  * Saat server menyala, sesi dimuat dari token, sehingga tidak perlu login lagi; data disinkronkan otomatis
  * tiap jam dan hasilnya disimpan di database ini.
  */

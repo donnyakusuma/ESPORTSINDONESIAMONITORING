@@ -24,7 +24,10 @@ Cukup itu. Dashboard langsung menampilkan data yang sama: ekspor Garmin dan **sn
 ([web/src/data/whoop-snapshot.json](web/src/data/whoop-snapshot.json)) ikut ada di repo. Snapshot dipakai otomatis
 bila server Whoop lokal tidak aktif.
 
-Yang **tidak** ikut di repo (rahasia / khusus komputer): `.env`, token Whoop/Garmin, dan folder `data/` server.
+Database akun dan data WHOOP/Garmin ikut di repo, di folder `data/` (`data/whoop`, `data/garmin`, `data/garmin-resmi`).
+Setelah atlet login atau sinkron, jalankan `npm run simpan-data` untuk commit dan push-nya. Token tersimpan terenkripsi.
+Yang **tidak** ikut di repo: `.env` dan file kunci enkripsi (`data/**/.kunci`, atau `TOKEN_ENC_KEY`/`GARMIN_ENC_KEY`).
+Salin kunci itu manual ke komputer lain, kalau tidak token tidak bisa dibaca di sana.
 
 ### Menyambungkan Whoop langsung (opsional)
 
