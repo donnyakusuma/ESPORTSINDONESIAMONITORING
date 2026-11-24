@@ -106,7 +106,7 @@ export function HalamanAbout() {
           </p>
           <p>
             <b>IBMS sesi = 50 + 10 × rata-rata z komponen yang tersedia</b> (minimal {PARAM_IND.MIN_KOMP_IBMS}). Contoh: z BSP 1,0, KMP 0,5, ROS 1,5 → <b>60</b>; tanpa KMP → <b>62,5</b>.{" "}
-            <b>IBMS {PARAM_IND.HARI_IBMS} hari</b> = rata-rata IBMS sesi dalam {PARAM_IND.HARI_IBMS} hari terakhir; z-nya dibandingkan dengan rata-rata {PARAM_IND.HARI_IBMS} hari terdahulu (minimal {PARAM_IND.MIN_RATA7}).
+            <b>IBMS {PARAM_IND.N_IBMS} data</b> = rata-rata IBMS dari {PARAM_IND.N_IBMS} sesi terakhir yang punya nilai (bukan {PARAM_IND.N_IBMS} hari berturut-turut); z-nya dibandingkan dengan rata-rata {PARAM_IND.N_IBMS} sesi sebelumnya (minimal {PARAM_IND.MIN_RATA7} rata-rata terdahulu).
           </p>
         </div>
       </section>

@@ -3,7 +3,7 @@ import type { HasilHarmonisasi } from "./harmonizer.mjs";
 export const VERSI_INDEKS: string;
 export const PARAM_IND: Readonly<{
   JENDELA_BASIS: number; MIN_BASIS: number; JENDELA_SESI_HARI: number; MIN_SESI: number; MIN_KOMP_IKB: number; MIN_KOMP_IBMS: number;
-  BATAS_Z: number; HARI_IBMS: number; MIN_RATA7: number; PITA_NORMAL: number; PITA_PERHATIAN: number;
+  BATAS_Z: number; N_IBMS: number; MIN_RATA7: number; PITA_NORMAL: number; PITA_PERHATIAN: number;
   BOBOT: Readonly<Record<string, { w: number; s: 1 | -1 }>>;
 }>;
 

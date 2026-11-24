@@ -212,15 +212,12 @@ export function DaftarAtlet({ bukaReadiness }: { bukaReadiness?(athleteId: strin
             judul="Tambah atlet"
             batal={() => setPanel(null)}
             simpan={(isi) => {
-              const galat = akun.validasi(null, isi.username, isi.password);
-              if (galat) return galat;
-              const { username, password, persetujuan, ...profil } = isi;
+              const { persetujuan, ...profil } = isi;
               const h = svc.daftarkanAtlet(actor, profil);
               if (!h.ok) return h.reason;
-              akun.simpan(h.data.id, username, password);
               const g = terapkanPersetujuan(h.data.id, persetujuan);
               if (g) return g;
-              aksi.jalankan(h, `${isi.nama.trim()} terdaftar. Atlet bisa masuk dengan nama pengguna ${username.trim()}.`);
+              aksi.jalankan(h, `${isi.nama.trim()} terdaftar.`);
               setFilter("aktif");
               setCari("");
               setPanel(null);
@@ -236,12 +233,9 @@ export function DaftarAtlet({ bukaReadiness }: { bukaReadiness?(athleteId: strin
             awal={sedangEdit}
             batal={() => setPanel(null)}
             simpan={(isi) => {
-              const galat = akun.validasi(sedangEdit.id, isi.username, isi.password);
-              if (galat) return galat;
-              const { username, password, persetujuan, ...profil } = isi;
+              const { persetujuan, ...profil } = isi;
               const h = svc.ubahProfilAtlet(actor, { athleteId: sedangEdit.id, ...profil });
               if (!h.ok) return h.reason;
-              akun.simpan(sedangEdit.id, username, password);
               const g = terapkanPersetujuan(sedangEdit.id, persetujuan);
               if (g) return g;
               aksi.jalankan(h, `Profil ${isi.nama.trim()} tersimpan.`);
@@ -285,9 +279,6 @@ interface IsianProfil {
   tanggalLahir: string;
   kelompok: string;
   guardianUserId?: string;
-  username: string;
-  /** Kosong saat mengedit berarti kata sandi tidak diubah. */
-  password: string;
   /** Persetujuan data berdasarkan kontrak; dicatat oleh Super admin/Admin. */
   persetujuan: { kuesioner: boolean; wearable: boolean; wali: boolean };
 }
@@ -310,7 +301,7 @@ function RingkasPersetujuan({ athleteId }: { athleteId: string }) {
 const KELOMPOK_BARU = "__baru__";
 
 function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpan(isi: IsianProfil): string | null }) {
-  const { hariIni, daftarKelompok, kelompok: kelompokAktif, akun } = useApp();
+  const { hariIni, daftarKelompok, kelompok: kelompokAktif } = useApp();
   const a = props.awal;
   const [nama, setNama] = useState(a?.nama ?? "");
   const [jk, setJk] = useState<JenisKelamin | "">(a?.jenisKelamin ?? "");
@@ -329,9 +320,6 @@ function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpa
   const [setujuKuesioner, setSetujuKuesioner] = useState(granted("kuesioner"));
   const [setujuWearable, setSetujuWearable] = useState(granted("wearable"));
   const [waliTtd, setWaliTtd] = useState(waliTercatat);
-  const [username, setUsername] = useState(a ? akun.username(a.id) : "");
-  const [sandi, setSandi] = useState("");
-  const [lihatSandi, setLihatSandi] = useState(false);
   const [dicoba, setDicoba] = useState(false);
   const [galatSimpan, setGalatSimpan] = useState("");
 
@@ -342,7 +330,6 @@ function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpa
     tempat: "",
     lahir: lahir > hariIni ? "Tanggal lahir tidak boleh di masa depan." : "",
     kelompok: !kelompok ? "Pilih atau isi Number of event." : "",
-    akun: akun.validasi(a?.id ?? null, username, sandi) ?? "",
   };
   const valid = Object.values(galat).every((g) => !g);
   const tampilGalat = (g: string) => (dicoba && g ? <span className="galat">{g}</span> : null);
@@ -363,8 +350,6 @@ function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpa
           tanggalLahir: lahir,
           kelompok,
           guardianUserId: wali.trim() || undefined,
-          username,
-          password: sandi,
           persetujuan: { kuesioner: setujuKuesioner, wearable: setujuWearable, wali: waliTtd },
         });
         if (g) setGalatSimpan(g);
@@ -430,27 +415,8 @@ function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpa
           <input id="profil-wali" type="text" value={wali} onChange={(e) => setWali(e.target.value.trim())} placeholder="mis. wali_andi" />
         </label>
       )}
+      {(anak || waliTercatat) && (
       <fieldset className="akun-masuk">
-        <legend>Persetujuan data (kontrak)</legend>
-        <p className="hint">
-          Dicatat oleh Super admin/Admin sesuai kontrak yang sudah ditandatangani atlet. Atlet tidak bisa mengubahnya sendiri, dan setiap
-          perubahan tercatat di Log Audit.
-        </p>
-        <label className="centang-admin">
-          <input id="setuju-kuesioner" type="checkbox" checked={setujuKuesioner} onChange={(e) => setSetujuKuesioner(e.target.checked)} />
-          <span>
-            <b>Kuesioner harian</b>
-            <span className="hint">Check-in pagi, RPE sesi, dan skor readiness.</span>
-          </span>
-        </label>
-        <label className="centang-admin">
-          <input id="setuju-wearable" type="checkbox" checked={setujuWearable} onChange={(e) => setSetujuWearable(e.target.checked)} />
-          <span>
-            <b>Data wearable (Garmin)</b>
-            <span className="hint">Kondisi Atlet dari jam Garmin; atlet tetap menghubungkan akun Garmin-nya sendiri.</span>
-          </span>
-        </label>
-        {(anak || waliTercatat) && (
           <label className="centang-admin">
             <input
               id="setuju-wali"
@@ -466,43 +432,8 @@ function FormProfil(props: { judul: string; awal?: Athlete; batal(): void; simpa
               </span>
             </span>
           </label>
-        )}
       </fieldset>
-      <fieldset className="akun-masuk">
-        <legend>Akun masuk (halaman landing)</legend>
-        <p className="hint">Atlet memakai nama pengguna dan kata sandi ini untuk masuk di halaman awal.</p>
-        <label className="field">
-          Username
-          <input
-            id="profil-username"
-            type="text"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            aria-invalid={dicoba && !!galat.akun && /pengguna/.test(galat.akun)}
-          />
-        </label>
-        <label className="field">
-          Password
-          {a && <span className="hint">Kosongkan bila kata sandi tidak diubah.</span>}
-          <span className="sandi-baris">
-            <input
-              id="profil-password"
-              type={lihatSandi ? "text" : "password"}
-              autoComplete="new-password"
-              value={sandi}
-              onChange={(e) => setSandi(e.target.value)}
-              aria-invalid={dicoba && !!galat.akun && /sandi/.test(galat.akun)}
-            />
-            <button type="button" className="btn kecil" aria-pressed={lihatSandi} onClick={() => setLihatSandi((v) => !v)}>
-              {lihatSandi ? "Sembunyikan" : "Tampilkan"}
-            </button>
-          </span>
-        </label>
-        {tampilGalat(galat.akun)}
-      </fieldset>
+      )}
       {galatSimpan && (
         <div className="pesan gagal" role="alert">
           {galatSimpan}

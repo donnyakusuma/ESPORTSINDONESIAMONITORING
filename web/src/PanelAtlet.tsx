@@ -659,13 +659,13 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
         <div className="wh-kartu">
           <div className="wh-grafik-kepala">
             <h3>Indeks Beban Mental Sesi (IBMS)</h3>
-            <span className="wh-label">per sesi · rata-rata {PARAM_IND.HARI_IBMS} hari</span>
+            <span className="wh-label">per sesi · rata-rata {PARAM_IND.N_IBMS} data</span>
           </div>
           {ibms7 && ibms7.nilai !== null ? (
             <div className="wh-ikb-atas">
               <b className="wh-ikb-angka">{angka(ibms7.nilai, 1)}</b>
               <span>
-                <b>Rata-rata {PARAM_IND.HARI_IBMS} hari</b>
+                <b>Rata-rata {PARAM_IND.N_IBMS} data</b>
                 <br />
                 <small className="wh-label">
                   {ibms7.n_sesi} sesi sampai {ibms7.sampai_tanggal}
@@ -689,7 +689,7 @@ export function PanelAtlet({ hasil }: { hasil: HasilSusun }) {
                 IBMS sesi = 50 + 10 × rata-rata z komponen yang tersedia (minimal {PARAM_IND.MIN_KOMP_IBMS}). Contoh: z BSP 1,0, KMP 0,5, ROS 1,5 → 50 + 10 × 1,0 = 60; tanpa KMP → 62,5.
               </li>
               <li>
-                IBMS {PARAM_IND.HARI_IBMS} hari = rata-rata IBMS sesi dalam {PARAM_IND.HARI_IBMS} hari terakhir; z-nya dibandingkan dengan rata-rata {PARAM_IND.HARI_IBMS} hari terdahulu (minimal {PARAM_IND.MIN_RATA7}).
+                IBMS {PARAM_IND.N_IBMS} data = rata-rata IBMS dari {PARAM_IND.N_IBMS} sesi terakhir yang punya nilai (bukan {PARAM_IND.N_IBMS} hari berturut-turut); z-nya dibandingkan dengan rata-rata {PARAM_IND.N_IBMS} sesi sebelumnya (minimal {PARAM_IND.MIN_RATA7} rata-rata terdahulu).
               </li>
             </ol>
           </details>

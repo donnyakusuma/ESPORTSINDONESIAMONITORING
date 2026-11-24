@@ -1,7 +1,7 @@
 // ============================================================================
 // indeks-esports.mjs: indeks gabungan khusus esports (1 file, tanpa dependensi)
 //   IKB  = Indeks Kesiapan Bermain (pagi hari, per catatan harian)
-//   IBMS = Indeks Beban Mental Sesi (per sesi) + rata-rata 7 hari
+//   IBMS = Indeks Beban Mental Sesi (per sesi) + rata-rata 7 data (sesi terakhir)
 // Masukan: keluaran harmonisasi() dari harmonizer.mjs (versi kamus >= 0.2.0).
 // Node >= 20.  Jalankan:  node indeks-esports.mjs --contoh   (cek hitung contoh dokumen)
 // Pakai di kode:  import { hitungIndeks } from './indeks-esports.mjs';
@@ -20,8 +20,8 @@ export const PARAM_IND = Object.freeze({
   MIN_KOMP_IKB: 3,
   MIN_KOMP_IBMS: 2,
   BATAS_Z: 3,
-  HARI_IBMS: 7,
-  MIN_RATA7: 4, // jumlah rata-rata 7 hari terdahulu agar z IBMS-7 sah
+  N_IBMS: 7, // jumlah DATA (sesi) terakhir, bukan hari kalender
+  MIN_RATA7: 4, // jumlah rata-rata 7 data terdahulu agar z IBMS-7 sah
   PITA_NORMAL: 45, // IKB >= ini: normal
   PITA_PERHATIAN: 35, // IKB >= ini: perhatian; di bawahnya: rendah
   // tanda s = +1 bila nilai naik itu baik, -1 bila buruk
@@ -91,18 +91,19 @@ export function hitungIndeks(hasil, p = PARAM_IND) {
     return { athlete_id: s.athlete_id, id: s.id, tanggal: s.tanggal, jenis: s.jenis, ...ibmsDariKomponen(z, p) };
   });
 
-  // --- IBMS 7 hari (nilai terakhir per atlet) ---
+  // --- IBMS 7 data (nilai terakhir per atlet): rata-rata N_IBMS sesi terakhir yang punya nilai, BUKAN 7 hari kalender ---
   const ibms7 = [];
   for (const a of new Set(ibms.map((x) => x.athlete_id))) {
-    const ok = ibms.filter((x) => x.athlete_id === a && x.nilai !== null);
+    const ok = ibms.filter((x) => x.athlete_id === a && x.nilai !== null); // sudah urut waktu mulai
     if (!ok.length) continue;
-    const tgl = [...new Set(ok.map((x) => x.tanggal))].sort();
-    const akhir = tgl.at(-1);
-    const rata7 = (d) => { const v = ok.filter((x) => hari(d) - hari(x.tanggal) >= 0 && hari(d) - hari(x.tanggal) < p.HARI_IBMS).map((x) => x.nilai); return v.length ? rata(v) : null; };
-    const nilai = rata7(akhir);
-    const riwayat = tgl.filter((d) => hari(akhir) - hari(d) >= p.HARI_IBMS).map(rata7).filter(Number.isFinite);
+    const akhirIdx = ok.length - 1;
+    const rataJendela = (idx) => rata(ok.slice(Math.max(0, idx - p.N_IBMS + 1), idx + 1).map((x) => x.nilai));
+    const nilai = rataJendela(akhirIdx);
+    // Riwayat: rata-rata jendela N_IBMS data yang penuh dan tidak tumpang tindih dengan jendela terakhir.
+    const riwayat = [];
+    for (let i = p.N_IBMS - 1; i <= akhirIdx - p.N_IBMS; i += 1) riwayat.push(rataJendela(i));
     const z = riwayat.length >= p.MIN_RATA7 ? zDari(nilai, riwayat, p.MIN_RATA7) : null;
-    ibms7.push({ athlete_id: a, sampai_tanggal: akhir, nilai: bulat(nilai), n_sesi: ok.filter((x) => hari(akhir) - hari(x.tanggal) < p.HARI_IBMS).length, z_terhadap_riwayat: bulat(z), n_riwayat: riwayat.length });
+    ibms7.push({ athlete_id: a, sampai_tanggal: ok[akhirIdx].tanggal, nilai: bulat(nilai), n_sesi: Math.min(ok.length, p.N_IBMS), z_terhadap_riwayat: bulat(z), n_riwayat: riwayat.length });
   }
 
   // --- IKB per catatan harian ---
