@@ -90,22 +90,38 @@ const hm = (detik: unknown) => {
 const n = (v: unknown) => (typeof v === "number" ? String(Math.round(v)) : "");
 
 type Peta = Record<string, any>;
-async function ambil<T>(f: () => Promise<T>): Promise<T | null> {
+/** Garmin tidak menjawab (jaringan, batas waktu, token): hari ini dicoba lagi nanti, bukan dianggap kosong. */
+class GagalGarmin extends Error {}
+const BATAS_WAKTU = 20_000;
+
+/** Satu permintaan ke Garmin dengan batas waktu, agar satu permintaan yang menggantung tidak menghentikan penarikan. */
+async function ambil<T>(f: () => Promise<T>, gagal: { n: number }): Promise<T | null> {
+  let jam: NodeJS.Timeout | undefined;
   try {
-    return await f();
+    return await Promise.race([
+      f(),
+      new Promise<never>((_, tolak) => {
+        jam = setTimeout(() => tolak(new Error("batas waktu")), BATAS_WAKTU);
+      }),
+    ]);
   } catch {
+    gagal.n++;
     return null;
+  } finally {
+    clearTimeout(jam);
   }
 }
 
 async function tarikMentah(id: string, tanggal: string): Promise<Record<string, string>> {
   const s = sesi.get(id)!;
   const d = new Date(`${tanggal}T12:00:00`);
+  const gagal = { n: 0 };
   const [ringkas, hrv, tidur] = await Promise.all([
-    ambil(() => s.gc.get<Peta>(`https://connectapi.garmin.com/usersummary-service/usersummary/daily/${s.displayName}?calendarDate=${tanggal}`)),
-    ambil(() => s.gc.get<Peta>(`https://connectapi.garmin.com/hrv-service/hrv/${tanggal}`)),
-    ambil(() => s.gc.getSleepData(d) as Promise<Peta>),
+    ambil(() => s.gc.get<Peta>(`https://connectapi.garmin.com/usersummary-service/usersummary/daily/${s.displayName}?calendarDate=${tanggal}`), gagal),
+    ambil(() => s.gc.get<Peta>(`https://connectapi.garmin.com/hrv-service/hrv/${tanggal}`), gagal),
+    ambil(() => s.gc.getSleepData(d) as Promise<Peta>, gagal),
   ]);
+  if (gagal.n === 3) throw new GagalGarmin("Garmin Connect tidak menjawab (jaringan atau sesi kedaluwarsa).");
   const t = tidur?.dailySleepDTO ?? {};
   const h = hrv?.hrvSummary ?? {};
   const r = ringkas ?? {};
@@ -172,31 +188,48 @@ function pulihkanSesi() {
   }
 }
 
-// ───────── Isi mundur 1 tahun: satu hari per ~1,5 detik agar tidak membebani Garmin ─────────
+// ───────── Isi mundur 1 tahun: satu hari per ~1 detik agar tidak membebani Garmin (±6–8 menit per atlet) ─────────
 const HARI_RIWAYAT = 365;
+const JEDA = 1000;
 const sedangIsi = new Set<string>();
-const sudahDicoba = new Map<string, Set<string>>(); // hari tanpa data tidak dicoba ulang sampai server restart
+/** Hari yang SUDAH dijawab Garmin tapi kosong (jam tidak dipakai): tidak dicoba ulang sampai server restart. */
+const hariKosong = new Map<string, Set<string>>();
+/** Jumlah hari dari 365 yang sudah diperiksa pada putaran berjalan (untuk progres di halaman Integrasi). */
+const progres = new Map<string, number>();
 
 async function isiMundur(id: string) {
   if (sedangIsi.has(id)) return;
   sedangIsi.add(id);
+  progres.set(id, 0);
+  const kosong = hariKosong.get(id) ?? new Set<string>();
+  hariKosong.set(id, kosong);
+  let gagalBeruntun = 0;
   try {
-    const dicoba = sudahDicoba.get(id) ?? new Set<string>();
-    sudahDicoba.set(id, dicoba);
     for (let k = 1; k <= HARI_RIWAYAT; k++) {
       if (!sesi.has(id)) return; // diputus di tengah jalan
+      progres.set(id, k);
       const t = new Date(Date.now() + 7 * 3600_000 - k * 86400_000).toISOString().slice(0, 10);
-      if (muatDb().atlet[id]?.riwayat?.[t] || dicoba.has(t)) continue;
-      dicoba.add(t);
+      if (muatDb().atlet[id]?.riwayat?.[t] || kosong.has(t)) continue;
       try {
         await tarik(id, t);
-      } catch {
-        // hari tanpa data (jam tidak dipakai) dibiarkan bolong
+        gagalBeruntun = 0;
+      } catch (e) {
+        if (e instanceof GagalGarmin) {
+          // Garmin tidak menjawab: hari ini dicoba lagi pada sinkron berikutnya (tiap jam).
+          if (++gagalBeruntun >= 5) {
+            console.error(`[garmin] isi mundur ${id} berhenti sementara: Garmin tidak menjawab 5 kali beruntun.`);
+            return;
+          }
+        } else {
+          kosong.add(t); // hari tanpa data dibiarkan bolong
+          gagalBeruntun = 0;
+        }
       }
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, JEDA));
     }
   } finally {
     sedangIsi.delete(id);
+    progres.delete(id);
   }
 }
 
@@ -217,8 +250,14 @@ export function garminServer(): Plugin {
     configureServer(server) {
       pulihkanSesi();
       // Sinkron otomatis: sekali saat menyala lalu tiap jam (data tersimpan di database).
-      setTimeout(() => void sinkronSemua(), 8000).unref();
-      setInterval(() => void sinkronSemua(), 3600_000).unref();
+      const awal = setTimeout(() => void sinkronSemua(), 8000).unref();
+      const tiapJam = setInterval(() => void sinkronSemua(), 3600_000).unref();
+      // Server Vite dimulai ulang (mis. vite.config berubah): hentikan jadwal lama agar tidak berlipat.
+      server.httpServer?.once("close", () => {
+        clearTimeout(awal);
+        clearInterval(tiapJam);
+        sesi.clear();
+      });
 
       server.middlewares.use("/api/garmin", async (req, res) => {
         const kirim = (kode: number, badan: unknown) => {
@@ -248,14 +287,16 @@ export function garminServer(): Plugin {
             const tanggal = url.searchParams.get("tanggal") ?? "";
             if (!sesi.has(atletId)) return kirim(401, { ok: false, pesan: "Akun Garmin atlet ini belum terhubung." });
             if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return kirim(400, { ok: false, pesan: "Tanggal tidak valid." });
-            return kirim(200, { ok: true, data: await tarik(atletId, tanggal) });
+            const data = await tarik(atletId, tanggal);
+            void isiMundur(atletId); // tombol "Tarik data" juga melengkapi riwayat 1 tahun yang masih bolong
+            return kirim(200, { ok: true, data, mengisi: true });
           }
           if (req.method === "GET" && url.pathname === "/saved") {
             // Data terakhir yang tersimpan per atlet (tanpa token).
             const db = muatDb();
             return kirim(200, {
               ok: true,
-              atlet: Object.entries(db.atlet).map(([atletId, r]) => ({ atletId, nama: r.nama, terhubungAt: r.terhubungAt, terakhir: r.terakhir ?? null, riwayat: r.riwayat ?? {}, mengisi: sedangIsi.has(atletId), aktif: sesi.has(atletId) })),
+              atlet: Object.entries(db.atlet).map(([atletId, r]) => ({ atletId, nama: r.nama, terhubungAt: r.terhubungAt, terakhir: r.terakhir ?? null, riwayat: r.riwayat ?? {}, mengisi: sedangIsi.has(atletId), diperiksa: progres.get(atletId) ?? null, totalHari: HARI_RIWAYAT, aktif: sesi.has(atletId) })),
             });
           }
           if (req.method === "POST" && url.pathname === "/logout") {

@@ -402,6 +402,12 @@ function LoginGarmin({ atlet }: { atlet: { id: string; nama: string }[] }) {
               <b>Terhubung ke akun {terhubung.nama}.</b> Sesi tersimpan di server, jadi tidak perlu login lagi. Data terakhir:{" "}
               {terhubung.tanggal}. Disinkronkan otomatis tiap jam.
             </p>
+            <p className="muted">
+              Riwayat tersimpan: <b>{Object.keys(terhubung.riwayat ?? {}).length} hari</b> (ditarik sampai 1 tahun ke belakang; hari tanpa data dibiarkan bolong).
+              {terhubung.mengisi && (
+                <> Sedang menarik… {terhubung.diperiksa ? `${terhubung.diperiksa}/${terhubung.totalHari ?? 365} hari diperiksa.` : ""}</>
+              )}
+            </p>
             <div className="row">
               <button type="button" className="btn utama" disabled={sibuk} onClick={() => void jalan(() => tarikGarmin(id, hariIni))}>
                 {sibuk ? "Menarik…" : "Tarik sekarang"}

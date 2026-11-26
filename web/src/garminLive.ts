@@ -8,6 +8,11 @@ interface Entri {
   data: Baris;
   /** Riwayat harian dari database server (tanggal -> data), sampai 1 tahun. */
   riwayat?: Record<string, Baris>;
+  /** Server sedang menarik riwayat 1 tahun ke belakang. */
+  mengisi?: boolean;
+  /** Hari yang sudah diperiksa dari total (selama `mengisi`). */
+  diperiksa?: number | null;
+  totalHari?: number;
 }
 let simpan: Record<string, Entri> = {};
 const pendengar = new Set<() => void>();
@@ -33,20 +38,30 @@ async function panggil(url: string, init?: RequestInit): Promise<{ ok: boolean; 
 }
 
 /** Muat data Garmin yang tersimpan di database server (hasil sinkron otomatis), tanpa login ulang. */
+let jadwal: ReturnType<typeof setTimeout> | undefined;
 export async function muatGarminTersimpan() {
   const r = await panggil("/api/garmin/saved");
   if (!r.ok) return;
-  const daftar = r.atlet as { atletId: string; nama: string; terakhir: { tanggal: string; data: Baris } | null; riwayat?: Record<string, Baris> }[];
+  type Baru = { atletId: string; nama: string; terakhir: { tanggal: string; data: Baris } | null; riwayat?: Record<string, Baris>; mengisi?: boolean; diperiksa?: number | null; totalHari?: number };
+  const daftar = r.atlet as Baru[];
   const baru = { ...simpan };
-  for (const a of daftar) if (a.terakhir) baru[a.atletId] = { nama: a.nama, tanggal: a.terakhir.tanggal, data: a.terakhir.data, riwayat: a.riwayat ?? {} };
+  for (const a of daftar)
+    if (a.terakhir)
+      baru[a.atletId] = { nama: a.nama, tanggal: a.terakhir.tanggal, data: a.terakhir.data, riwayat: a.riwayat ?? {}, mengisi: a.mengisi, diperiksa: a.diperiksa, totalHari: a.totalHari };
   ubah(baru);
+  // Selama riwayat 1 tahun sedang ditarik, muat ulang tiap 15 detik agar Dashboard ikut terisi.
+  clearTimeout(jadwal);
+  if (daftar.some((a) => a.mengisi)) jadwal = setTimeout(() => void muatGarminTersimpan(), 15_000);
 }
 
 export async function tarikGarmin(atletId: string, tanggal: string): Promise<{ ok: boolean; pesan: string }> {
   const r = await panggil(`/api/garmin/stats?atlet=${encodeURIComponent(atletId)}&tanggal=${tanggal}`);
   if (!r.ok) return { ok: false, pesan: r.pesan ?? "Gagal menarik data." };
   const data = r.data as Baris;
-  ubah({ ...simpan, [atletId]: { nama: data.Name ?? "", tanggal, data } });
+  const lama = simpan[atletId];
+  // Riwayat yang sudah ada dipertahankan; data hari ini ikut masuk riwayat.
+  ubah({ ...simpan, [atletId]: { ...lama, nama: data.Name ?? "", tanggal, data, riwayat: { ...lama?.riwayat, [tanggal]: data }, mengisi: true } });
+  void muatGarminTersimpan(); // mulai memantau penarikan riwayat 1 tahun
   return { ok: true, pesan: "Data Garmin Connect berhasil ditarik." };
 }
 
