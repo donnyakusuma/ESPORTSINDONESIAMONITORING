@@ -44,12 +44,6 @@ function TabGarmin() {
         </div>
         <StatusIntegrasi pengaturan={pengaturan} />
       </div>
-      <Info jenis="peringatan">
-        <span>
-          <b>Mode prototipe.</b> Belum ada server, jadi kredensial hanya disimpan di memori browser, dan uji koneksi serta sinkronisasi
-          disimulasikan. Koneksi sungguhan butuh backend HTTPS publik dan akun Garmin Connect Developer Program yang disetujui Garmin.
-        </span>
-      </Info>
       <Pesan umpan={aksi.umpan} />
 
       <LoginGarmin atlet={atlet.map((a) => ({ id: a.athleteId, nama: a.nama }))} />
@@ -65,9 +59,7 @@ function TabGarmin() {
           <AlamatSalin label="OAuth callback" nilai={`${location.origin}/api/garmin/oauth/callback`} />
           <AlamatSalin label="Webhook (ping/push)" nilai={`${location.origin}/api/garmin/webhook`} />
           <AlamatSalin label="Deregistrasi & izin pengguna" nilai={`${location.origin}/api/garmin/deregistration`} />
-          <p className="muted kecil">
-            Alamat di atas harus HTTPS dan bisa diakses dari internet. Saat ini masih alamat lokal karena prototipe belum punya server.
-          </p>
+          <p className="muted kecil">Alamat di atas harus HTTPS dan bisa diakses dari internet.</p>
         </div>
       </section>
 

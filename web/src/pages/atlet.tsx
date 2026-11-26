@@ -668,9 +668,6 @@ function KoneksiGarminSaya() {
               Data Garmin (langkah, tidur, kalori, detak jantung, stres, Pulse Ox, Body Battery, komposisi tubuh, respirasi, dan tekanan darah)
               akan masuk otomatis sesuai persetujuan dalam kontrak Anda.
             </p>
-            <p className="muted kecil">
-              Di aplikasi sungguhan, Anda akan diarahkan ke halaman masuk Garmin Connect. Di prototipe ini langkah itu disimulasikan.
-            </p>
             <div className="row">
               <button
                 className="btn utama"
